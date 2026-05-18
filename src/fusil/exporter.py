@@ -258,33 +258,51 @@ class FusilExporter:
     # Date setting
     # ------------------------------------------------------------------
 
-    def _set_dates(self):
-        """Set From Date and To Date to self.date_str (DD-MM-YYYY)."""
-        self.log.info("Setting dates to %s", self.date_str)
-        date_fields = []
+    def _find_date_fields(self) -> list:
+        """Return Edit controls whose current value looks like a date (DD-MM-YYYY)."""
+        fields = []
         try:
             for ctrl in self.main_win.descendants(control_type="Edit"):
                 try:
                     val = ctrl.get_value()
                     if val and "-" in val and len(val) >= 8:
-                        date_fields.append(ctrl)
+                        fields.append(ctrl)
                 except Exception:
                     continue
         except Exception as exc:
             self.log.warning("Could not enumerate date fields: %s", exc)
+        return fields
 
-        if len(date_fields) < 2:
-            self.log.warning("Expected 2 date fields, found %d — View may use wrong date", len(date_fields))
+    def _fill_date_field(self, field):
+        """Click a date field, select-all, and type the export date."""
+        field.click_input()
+        field.type_keys("^a")
+        time.sleep(0.2)
+        field.type_keys(self.date_str, with_spaces=False)
+        time.sleep(0.2)
+        send_keys("{TAB}")
+        time.sleep(0.3)
+
+    def _set_dates(self, date_mode: str):
+        """Set date field(s) according to the report's date_mode."""
+        if date_mode == "none":
             return
 
-        for field in date_fields[:2]:
-            field.click_input()
-            field.type_keys("^a")    # select-all — triple_click_input not on UIA EditWrapper
-            time.sleep(0.2)
-            field.type_keys(self.date_str, with_spaces=False)
-            time.sleep(0.2)
-            send_keys("{TAB}")
-            time.sleep(0.3)
+        self.log.info("Setting dates to %s (mode: %s)", self.date_str, date_mode)
+        fields = self._find_date_fields()
+
+        if date_mode == "from_to":
+            if len(fields) < 2:
+                self.log.warning("Expected 2 date fields, found %d — View may use wrong date", len(fields))
+                return
+            for field in fields[:2]:
+                self._fill_date_field(field)
+
+        elif date_mode == "as_at":
+            if not fields:
+                self.log.warning("No date field found for as_at mode")
+                return
+            self._fill_date_field(fields[0])
 
     # ------------------------------------------------------------------
     # View + export
@@ -307,19 +325,22 @@ class FusilExporter:
             pass
         return -1
 
-    def _click_view(self):
-        """Click the View (F1) button, or press F1 as fallback.
-        Also dismisses the 'Data not found for given options.' dialog that
-        FUSIL shows when a date range has no records."""
+    def _click_view(self, view_mode: str = "f1"):
+        """Load data for the report.
+        view_mode='f1'   — click View (F1); also dismisses 'no data' dialog.
+        view_mode='auto' — data loads on navigation; no click needed (Customer Accounts).
+        """
+        if view_mode == "auto":
+            self.log.info("View auto-loaded — no click needed")
+            return
+
         try:
             self.main_win.child_window(title_re="View.*", control_type="Button").click_input()
         except Exception:
             send_keys("{F1}")
         time.sleep(_VIEW_WAIT)
 
-        # Dismiss "Data not found for given options." dialog if it appeared.
-        # The dialog is a child window of FUSIL, not a top-level window,
-        # so we search main_win descendants for the OK button directly.
+        # Dismiss "Data not found for given options." if it appeared
         try:
             ok = self._find_by_descendants(self.main_win, title="OK")
             if ok:
@@ -330,11 +351,12 @@ class FusilExporter:
 
         self.log.info("View loaded")
 
-    def _trigger_export(self):
-        """Press Ctrl+X and dismiss the success dialog."""
-        self.log.info("Exporting (Ctrl+X)")
+    def _trigger_export(self, export_key: str = "^x"):
+        """Press the export shortcut and dismiss the success dialog."""
+        key_label = export_key.replace("^", "Ctrl+").upper()
+        self.log.info("Exporting (%s)", key_label)
         self.main_win.set_focus()
-        send_keys("^x")
+        send_keys(export_key)
         self.log.info("Waiting up to %ds for export to complete", _EXPORT_WAIT)
         time.sleep(_EXPORT_WAIT)
         # Dismiss "Export file generated successfully. Do you want open the file?"
@@ -378,11 +400,15 @@ class FusilExporter:
             self.log.warning("Skipping %s — menu path not configured", report_type)
             return None
 
+        date_mode  = report.get("date_mode",  "from_to")
+        view_mode  = report.get("view_mode",  "f1")
+        export_key = report.get("export_key", "^x")
+
         self.log.info("=== %s ===", report_type.upper())
         try:
             self._navigate_menu(menu_path)
-            self._set_dates()
-            self._click_view()
+            self._set_dates(date_mode)
+            self._click_view(view_mode)
 
             count = self._get_row_count()
             if count == 0:
@@ -395,7 +421,7 @@ class FusilExporter:
                 self.log.warning("Could not read row count for %s — attempting export anyway", report_type)
 
             export_started = time.time()
-            self._trigger_export()
+            self._trigger_export(export_key)
 
             path = self._find_exported_file(report_type, exported_after=export_started)
             if path:

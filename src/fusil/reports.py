@@ -1,40 +1,68 @@
 # All 7 report definitions — menu paths confirmed from flows/Navigations/Fusil navigations.xlsx.
-# Note: Customer Accounts navigates via "Masters" (not "Reports").
-# Note: Purchase Returns path was a typo in the source spreadsheet; corrected from the actual filename.
+#
+# date_mode:   "from_to"  — set both From Date and To Date
+#              "as_at"    — set single "As At Date" field (Customer Balances)
+#              "none"     — no date fields on this screen (Stocks, Customer Accounts)
+#
+# view_mode:   "f1"       — click View (F1) to load data (standard)
+#              "auto"     — data loads automatically on navigation (Customer Accounts)
+#
+# export_key:  pywinauto send_keys string for the export shortcut
+#              "^x" = Ctrl+X (standard), "^o" = Ctrl+O (Customer Accounts)
 
 REPORTS = [
     {
-        "type": "sale",
-        "menu_path": ["Reports", "RGF", "Sales", "RGF Sales Book"],
+        "type":       "sale",
+        "menu_path":  ["Reports", "RGF", "Sales", "RGF Sales Book"],
+        "date_mode":  "from_to",
+        "view_mode":  "f1",
+        "export_key": "^x",
     },
     {
-        "type": "sale_returns",
-        "menu_path": ["Reports", "RGF", "Sales", "RGF Sales Return Book"],
+        "type":       "sale_returns",
+        "menu_path":  ["Reports", "RGF", "Sales", "RGF Sales Return Book"],
+        "date_mode":  "from_to",
+        "view_mode":  "f1",
+        "export_key": "^x",
     },
     {
-        "type": "purchase",
-        "menu_path": ["Reports", "RGF", "Purchase", "RGF Purchase Book"],
+        "type":       "purchase",
+        "menu_path":  ["Reports", "RGF", "Purchase", "RGF Purchase Book"],
+        "date_mode":  "from_to",
+        "view_mode":  "f1",
+        "export_key": "^x",
     },
     {
-        "type": "purchase_returns",
-        "menu_path": ["Reports", "RGF", "Purchase", "RGF Purchase Return Book"],
+        "type":       "purchase_returns",
+        "menu_path":  ["Reports", "RGF", "Purchase", "RGF Purchase Return Book"],
+        "date_mode":  "from_to",
+        "view_mode":  "f1",
+        "export_key": "^x",
     },
     {
-        "type": "stocks",
-        "menu_path": ["Reports", "RGF", "Stock Reports", "RGF Current Stock Balances"],
+        "type":       "stocks",
+        "menu_path":  ["Reports", "RGF", "Stock Reports", "RGF Current Stock Balances"],
+        "date_mode":  "none",
+        "view_mode":  "f1",
+        "export_key": "^x",
     },
     {
-        "type": "customer_balances",
-        "menu_path": ["Reports", "FI Finance", "Balance", "Customer Balances"],
+        "type":       "customer_balances",
+        "menu_path":  ["Reports", "FI Finance", "Balance", "Customer Balances"],
+        "date_mode":  "as_at",
+        "view_mode":  "f1",
+        "export_key": "^x",
     },
     {
-        "type": "customer_accounts",
-        "menu_path": ["Masters", "General", "Customer Accounts"],
+        "type":       "customer_accounts",
+        "menu_path":  ["Masters", "General", "Customer Accounts"],
+        "date_mode":  "none",
+        "view_mode":  "auto",   # list loads on navigation; no View button
+        "export_key": "^o",     # Ctrl+O, not Ctrl+X
     },
 ]
 
 # Leading prefix of each exported filename — used to locate the file after export.
-# Match by prefix and take the most-recently-modified .xlsx in the export folder.
 FILENAME_PREFIX = {
     "sale":              "RGF Sales Book",
     "sale_returns":      "RGF Sales Return Book",
