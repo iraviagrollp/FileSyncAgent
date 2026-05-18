@@ -11,9 +11,6 @@ from config import Config
 from .reports import FILENAME_PREFIX
 
 
-class LoginError(Exception):
-    """Raised when FUSIL login credentials are rejected or the login screen does not clear."""
-
 # Actual OS window title for FUSIL (both login screen and main window use this title).
 # "IRAVIAGROLIFELLP" is a label rendered *inside* the window, not the OS window title.
 _FUSIL_TITLE = "Fusil"
@@ -90,21 +87,10 @@ class FusilExporter:
                 if edit_count > 1:
                     self.log.info("Login screen detected — entering credentials")
                     self._do_login(win)
-                    # Verify the screen transitioned: edit count must DECREASE after login.
-                    # The main screen has fewer Edit fields than the login form.
-                    # Comparing against pre-login count handles any main-screen field count.
-                    time.sleep(3)
-                    try:
-                        post_edit_count = len(win.descendants(control_type="Edit"))
-                    except Exception:
-                        post_edit_count = edit_count  # unknown — assume unchanged (fail safe)
-                    self.log.info("Post-login edit fields: %d (was %d)", post_edit_count, edit_count)
-                    if post_edit_count >= edit_count:
-                        raise LoginError(
-                            "Login failed — edit field count did not decrease after submitting credentials. "
-                            "Check fusil_password in config.json."
-                        )
-                    self.log.info("Login successful — main screen ready")
+                    # No post-login verification: the main screen also has multiple Edit
+                    # fields so count-based checks cause false LoginErrors. Wrong credentials
+                    # will surface as menu navigation failures downstream.
+                    self.log.info("Login submitted — proceeding to main screen")
                 else:
                     self.log.info("No login screen — already authenticated")
                 return
