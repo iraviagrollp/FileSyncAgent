@@ -234,6 +234,7 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 | Config loading | Typed `Config` dataclass + `Config.load()` | Single place to see all settings; IDE autocomplete; no stringly-typed key access |
 | Modular structure | `fusil/`, `upload/`, `config.py`, `utils.py` | Separates UI automation from S3 logic; per-report config data in `reports.py` |
 | Window detection | `Desktop(backend="uia")` matching title `"Fusil"` | Actual OS window title is `"Fusil"` — `"IRAVIAGROLIFELLP"` is a label inside the window, not the OS title. Confirmed via diagnostic script. |
+| Menu navigation | Search box ("Search Menu By Enter Key") instead of menu clicks | FUSIL uses a custom hamburger-style navigation panel, not a standard MenuBar. `MenuItem` control type not found. Search box navigation is simpler and more reliable. |
 | Login detection | Count Edit fields: >1 = login screen | Login screen has 4 Edit fields; main screen also has 4+. No post-login verification — count-based check caused false LoginErrors. Wrong credentials surface as menu navigation failures. |
 | Login field detection | Find username/password by current value (non-empty vs empty) | 4 edit fields exist — positional indexing unreliable; value-based detection identifies correct fields. `triple_click_input` not available on UIA EditWrapper — use `type_keys("^a") + type_keys(value)`. |
 | Login security | Exception logged at DEBUG only (not WARNING) | pywinauto exceptions can echo typed keys — password must not appear in log files |
