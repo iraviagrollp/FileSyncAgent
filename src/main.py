@@ -14,11 +14,44 @@ import boto3
 
 from config import Config
 from fusil.exporter import FusilExporter
-from fusil.reports import REPORTS
+from fusil.reports import REPORT_DISPLAY_NAME, REPORTS
 from upload.s3 import send_sns_alert, upload_with_retry, write_manifest
 from utils import setup_logging, within_schedule_window
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config" / "config.json"
+
+
+def _log_run_summary(log, export_date, exporter):
+    """Print a formatted summary table of all report statuses."""
+    exported_types = {f["type"] for f in exporter.exported_files}
+
+    col_flow    = 26
+    col_status  = 20
+    header = f"{'Flow':<{col_flow}} {'Status':<{col_status}} Comment"
+    divider = "-" * len(header)
+
+    log.info("=" * len(header))
+    log.info("RUN SUMMARY — %s", export_date)
+    log.info(header)
+    log.info(divider)
+
+    for report in REPORTS:
+        rtype = report["type"]
+        name  = REPORT_DISPLAY_NAME.get(rtype, rtype)
+        comment = exporter.report_comments.get(rtype, "Not attempted")
+
+        if rtype in exported_types:
+            status = "Yes"
+        elif rtype in exporter.no_data_reports:
+            status = "Yes"
+        elif rtype in exporter.failed_reports:
+            status = "Error"
+        else:
+            status = "Error"
+
+        log.info(f"{name:<{col_flow}} {status:<{col_status}} {comment}")
+
+    log.info("=" * len(header))
 
 
 def main():
@@ -52,8 +85,7 @@ def main():
     finally:
         exporter.close()
 
-    if exporter.no_data_reports:
-        log.info("No data on %s for: %s (skipped — not a failure)", export_date, exporter.no_data_reports)
+    _log_run_summary(log, export_date, exporter)
 
     if exporter.failed_reports:
         msg = f"Export errors on {export_date} for: {exporter.failed_reports}"

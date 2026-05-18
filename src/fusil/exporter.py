@@ -34,8 +34,9 @@ class FusilExporter:
         self.app: Optional[Application] = None
         self.main_win = None
         self.exported_files: list[dict] = []
-        self.no_data_reports: list[str] = []  # skipped — no data on this date (not a failure)
-        self.failed_reports: list[str] = []   # errored unexpectedly
+        self.no_data_reports: list[str] = []   # skipped — no data on this date (not a failure)
+        self.failed_reports: list[str] = []    # errored unexpectedly
+        self.report_comments: dict[str, str] = {}  # per-report comment for summary
 
     # ------------------------------------------------------------------
     # Launch + login
@@ -426,10 +427,9 @@ class FusilExporter:
 
             count = self._get_row_count()
             if count == 0:
-                # FUSIL blocks export when there is no data — this is expected
-                # (e.g. no sales on a holiday). Skip without alerting.
                 self.log.info("No data for %s on %s (Count=0) — skipping", report_type, self.date_str)
                 self.no_data_reports.append(report_type)
+                self.report_comments[report_type] = "No Export - No Data"
                 return None
             if count == -1:
                 self.log.warning("Could not read row count for %s — attempting export anyway", report_type)
@@ -441,14 +441,17 @@ class FusilExporter:
             if path:
                 self.log.info("File found: %s", path.name)
                 self.exported_files.append({"type": report_type, "local_path": path})
+                self.report_comments[report_type] = "Export Successful"
             else:
                 self.log.error("No exported file found for %s in %s", report_type, self.config.export_folder)
                 self.failed_reports.append(report_type)
+                self.report_comments[report_type] = "File not found after export"
             return path
 
         except Exception as exc:
             self.log.error("Export failed for %s: %s", report_type, exc, exc_info=True)
             self.failed_reports.append(report_type)
+            self.report_comments[report_type] = f"{type(exc).__name__}: {exc}"
             return None
 
     # ------------------------------------------------------------------

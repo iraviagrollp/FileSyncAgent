@@ -62,6 +62,17 @@ REPORTS = [
     },
 ]
 
+# Human-readable display names for the summary table
+REPORT_DISPLAY_NAME = {
+    "sale":              "Sales",
+    "sale_returns":      "Sales Returns",
+    "purchase":          "Purchases",
+    "purchase_returns":  "Purchase Returns",
+    "stocks":            "Current Stock Balances",
+    "customer_balances": "Customer Balances",
+    "customer_accounts": "Customer Accounts",
+}
+
 # Leading prefix of each exported filename — used to locate the file after export.
 FILENAME_PREFIX = {
     "sale":              "RGF Sales Book",
