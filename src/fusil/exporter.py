@@ -1,4 +1,5 @@
 import logging
+import subprocess
 import time
 from datetime import date
 from pathlib import Path
@@ -42,7 +43,27 @@ class FusilExporter:
     # Launch + login
     # ------------------------------------------------------------------
 
+    def _kill_existing_fusil_instances(self):
+        """Terminate any running FUSILINFINITY.exe processes before launching a fresh one."""
+        exe_name = Path(self.config.fusil_exe_path).name  # e.g. "FUSILINFINITY.exe"
+        result = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {exe_name}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True,
+        )
+        running = [
+            line for line in result.stdout.splitlines()
+            if exe_name.lower() in line.lower()
+        ]
+        if not running:
+            self.log.info("No existing FUSIL instances found")
+            return
+        self.log.info("Found %d existing FUSIL instance(s) — terminating", len(running))
+        subprocess.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
+        time.sleep(2)
+        self.log.info("Existing FUSIL instance(s) closed")
+
     def launch(self):
+        self._kill_existing_fusil_instances()
         self.log.info("Launching FUSIL: %s", self.config.fusil_exe_path)
         self.app = Application(backend="uia").start(
             self.config.fusil_exe_path,
