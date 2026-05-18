@@ -194,27 +194,19 @@ class FusilExporter:
         self._navigate_menu_by_clicks(menu_path)
 
     def _open_hamburger_menu(self):
-        """Click the ≡ hamburger MenuItem to open the navigation panel."""
-        for kwargs in [
-            # Two-step: find the MenuStrip container first, then the hamburger inside it
-            # (more reliable than searching the whole window tree)
-            {"auto_id": "MainMenu1"},           # parent container
-            {"title": ""},                # FontAwesome hamburger icon character
-            {"auto_id": "MainMenu"},            # direct auto_id search
-        ]:
-            try:
-                if kwargs.get("auto_id") == "MainMenu1":
-                    # Click the hamburger inside its parent container
-                    container = self.main_win.child_window(auto_id="MainMenu1")
-                    container.child_window(auto_id="MainMenu").click_input()
-                else:
-                    self.main_win.child_window(**kwargs).click_input()
-                self.log.info("Hamburger menu opened")
-                time.sleep(_MENU_WAIT)
-                return
-            except Exception:
-                continue
-        self.log.warning("Hamburger button not found — attempting menu navigation anyway")
+        """Click the ≡ hamburger MenuItem (auto_id='MainMenu') to open the nav panel."""
+        try:
+            # Resolve each step explicitly — mirrors the manual test that confirmed working.
+            # Chaining unresolved WindowSpecification objects behaves differently.
+            container = self.main_win.child_window(auto_id="MainMenu1")
+            self.log.info("MainMenu1 exists: %s", container.exists(timeout=2))
+            hamburger = container.child_window(auto_id="MainMenu")
+            self.log.info("MainMenu exists: %s", hamburger.exists(timeout=2))
+            hamburger.click_input()
+            self.log.info("Hamburger menu opened")
+            time.sleep(_MENU_WAIT)
+        except Exception as exc:
+            self.log.warning("Hamburger click failed: %s — proceeding anyway", exc)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
