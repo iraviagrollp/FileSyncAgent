@@ -314,14 +314,14 @@ class FusilExporter:
             send_keys("{F1}")
         time.sleep(_VIEW_WAIT)
 
-        # Dismiss "Data not found for given options." dialog if it appeared
+        # Dismiss "Data not found for given options." dialog if it appeared.
+        # The dialog is a child window of FUSIL, not a top-level window,
+        # so we search main_win descendants for the OK button directly.
         try:
-            dialog = Desktop(backend="uia").window(title="Message")
-            if dialog.exists(timeout=2):
-                ok = self._find_by_descendants(dialog, title="OK")
-                if ok:
-                    ok.click_input()
-                    self.log.info("Dismissed 'no data' dialog")
+            ok = self._find_by_descendants(self.main_win, title="OK")
+            if ok:
+                ok.click_input()
+                self.log.info("Dismissed 'no data' dialog")
         except Exception:
             pass
 
