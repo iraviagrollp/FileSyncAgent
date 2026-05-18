@@ -171,64 +171,72 @@ class FusilExporter:
 
     def _navigate_menu(self, menu_path: list[str]):
         """
-        Navigate to a report screen using the 'Search Menu By Enter Key' search box.
-        Typing the screen name (last item in menu_path) and pressing Enter is more
-        reliable than clicking through FUSIL's custom hamburger-style navigation panel.
-        Falls back to pywinauto menu_select if the search box is not found.
+        Open the hamburger (≡) button then click through the menu path.
         """
-        screen_name = menu_path[-1]
-        self.log.info("Navigating to: %s", screen_name)
+        self.log.info("Menu: %s", " -> ".join(menu_path))
         self.main_win.set_focus()
+        self._open_hamburger_menu()
+        self._navigate_menu_by_clicks(menu_path)
 
-        # Primary: use the search box in the header bar
-        if self._navigate_via_search(screen_name):
-            return
+    def _open_hamburger_menu(self):
+        """Click the ≡ button in the title bar to open the navigation panel."""
+        # Try known hamburger button titles/characters, then fall back to first button
+        for kwargs in [
+            {"title": "≡"},
+            {"title": "☰"},
+            {"title": "Menu"},
+            {"control_type": "Button", "found_index": 0},
+        ]:
+            try:
+                btn = self.main_win.child_window(**kwargs)
+                if btn.exists(timeout=1):
+                    btn.click_input()
+                    self.log.info("Hamburger menu opened")
+                    time.sleep(_MENU_WAIT)
+                    return
+            except Exception:
+                continue
+        self.log.warning("Hamburger button not found — proceeding anyway")
 
-        # Fallback: pywinauto menu_select (may not work for custom menus)
-        self.log.info("Search navigation failed — trying menu_select")
-        try:
-            self.main_win.menu_select("->".join(menu_path))
-            time.sleep(_ACTION_WAIT)
-        except Exception as exc:
-            self.log.warning("menu_select also failed (%s) — navigation may have failed", exc)
-
-    def _navigate_via_search(self, screen_name: str) -> bool:
+    def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
-        Type the screen name into 'Search Menu By Enter Key' and press Enter.
-        Returns True if the search box was found and used, False otherwise.
+        Click each item in menu_path in sequence.
+        Searches by title only — no control_type constraint — because FUSIL's
+        hamburger navigation panel exposes items as non-standard control types.
+        After each click tries to find a newly-opened submenu popup on the Desktop.
         """
-        try:
-            # Find the search box by its placeholder text
-            search_box = self.main_win.child_window(
-                title_re="Search.*", control_type="Edit"
-            )
-            search_box.click_input()
-            search_box.type_keys(screen_name, with_spaces=True)
-            send_keys("{ENTER}")
-            time.sleep(_ACTION_WAIT)
-            self.log.info("Search submitted: %s", screen_name)
-            return True
-        except Exception as exc:
-            self.log.debug("Search box not found via title_re: %s", exc)
-
-        # Second attempt: find the first empty Edit in the header (heuristic)
-        try:
-            for edit in self.main_win.descendants(control_type="Edit"):
+        desktop = Desktop(backend="uia")
+        current = self.main_win
+        for label in menu_path:
+            clicked = False
+            for kwargs in [
+                {"title": label},
+                {"title": label, "control_type": "MenuItem"},
+                {"title": label, "control_type": "ListItem"},
+                {"title": label, "control_type": "Custom"},
+            ]:
                 try:
-                    val = (edit.get_value() or "").strip()
-                    if not val:
-                        edit.click_input()
-                        edit.type_keys(screen_name, with_spaces=True)
-                        send_keys("{ENTER}")
-                        time.sleep(_ACTION_WAIT)
-                        self.log.info("Search submitted via fallback edit: %s", screen_name)
-                        return True
+                    ctrl = current.child_window(**kwargs)
+                    if ctrl.exists(timeout=2):
+                        ctrl.click_input()
+                        time.sleep(_MENU_WAIT)
+                        clicked = True
+                        break
                 except Exception:
                     continue
-        except Exception as exc:
-            self.log.debug("Fallback search box scan failed: %s", exc)
 
-        return False
+            if not clicked:
+                raise RuntimeError(f"Menu item not found: '{label}'")
+
+            # After each click, check if a submenu popup appeared
+            try:
+                popup = desktop.window(control_type="Menu", found_index=0)
+                if popup.exists(timeout=1):
+                    current = popup
+                    continue
+            except Exception:
+                pass
+            current = self.main_win
 
     # ------------------------------------------------------------------
     # Date setting
