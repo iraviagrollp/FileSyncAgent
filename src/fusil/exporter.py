@@ -77,9 +77,8 @@ class FusilExporter:
                     continue
 
                 # Step 2: FUSIL window found — detect login screen by counting
-                # Edit fields. Login screen has 2 (username + password).
-                # Main screen has 1 (search box). More reliable than button
-                # lookup on a 32-bit app under 64-bit UIA.
+                # Edit fields. Login screen has 4 (confirmed on this machine).
+                # Main screen has 1 (search box only).
                 self.log.info("FUSIL window found (pid=%s)", win.process_id())
                 edit_count = 0
                 try:
@@ -88,7 +87,7 @@ class FusilExporter:
                     self.log.debug("Edit field count failed: %s", exc)
 
                 self.log.info("Edit fields visible: %d", edit_count)
-                if edit_count >= 2:
+                if edit_count > 1:
                     self.log.info("Login screen detected — entering credentials")
                     self._do_login(win)
                     # Verify the screen transitioned away from the login form
@@ -97,7 +96,7 @@ class FusilExporter:
                         post_edit_count = len(win.descendants(control_type="Edit"))
                     except Exception:
                         post_edit_count = 2  # unknown state — assume still on login to surface failure
-                    if post_edit_count >= 2:
+                    if post_edit_count > 1:
                         raise LoginError(
                             "Login failed — screen still showing login form after submitting credentials. "
                             "Check fusil_password in config.json."
@@ -114,27 +113,60 @@ class FusilExporter:
     def _do_login(self, login_win):
         """Type credentials into the login form and click LOGIN."""
         try:
-            # Use descendants() — Edit controls are inside a nested panel
             edits = login_win.descendants(control_type="Edit")
-            if len(edits) >= 2:
-                # index 0 = username, index 1 = password (top-to-bottom order)
-                edits[0].triple_click_input()
-                edits[0].type_keys(self.config.fusil_username, with_spaces=True)
+            self.log.info("Login form has %d Edit controls", len(edits))
+
+            # Identify fields by current value:
+            #   username field = pre-filled (non-empty)
+            #   password field = empty
+            username_field = None
+            password_field = None
+            for edit in edits:
+                try:
+                    val = (edit.get_value() or "").strip()
+                    if val and username_field is None:
+                        username_field = edit
+                    elif not val and password_field is None:
+                        password_field = edit
+                except Exception:
+                    continue
+
+            # Fallback: assign by position if value-based detection didn't find both
+            if username_field is None and password_field is None:
+                if len(edits) < 1:
+                    self.log.warning("No Edit controls found on login screen")
+                    return
+                password_field = edits[-1]
+                if len(edits) >= 2:
+                    username_field = edits[0]
+
+            # Fill username — type_keys("^a") targets the control directly,
+            # avoiding send_keys which fires on the active window (may differ)
+            if username_field:
+                username_field.click_input()
+                username_field.type_keys("^a")
+                username_field.type_keys(self.config.fusil_username, with_spaces=True)
                 time.sleep(0.2)
-                edits[1].set_focus()
-                edits[1].type_keys(self.config.fusil_password, with_spaces=True)
-            elif len(edits) == 1:
-                edits[0].set_focus()
-                edits[0].type_keys(self.config.fusil_password, with_spaces=True)
-            else:
-                self.log.warning("No Edit controls found on login screen")
-                return
+
+            # Fill password
+            password_field.click_input()
+            password_field.type_keys(self.config.fusil_password, with_spaces=True)
             time.sleep(0.4)
-            login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
+
+            # Click LOGIN — fall back to Enter if button not found via UIA
+            try:
+                login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
+            except Exception:
+                self.log.debug("LOGIN button not found via UIA — pressing Enter")
+                send_keys("{ENTER}")
+
             self.log.info("Login submitted — waiting for main window")
             time.sleep(4)
         except Exception as exc:
-            self.log.warning("Login failed: %s", exc)
+            # Log at WARNING without exc details — exception messages from pywinauto
+            # can echo typed keys, which would put the password in the log file.
+            self.log.warning("Login credential entry failed — check credentials or FUSIL UI state")
+            self.log.debug("Login exception detail: %s", exc)
 
     def connect(self):
         self._handle_login_if_needed()
