@@ -51,18 +51,44 @@ class FusilExporter:
     def _handle_login_if_needed(self):
         """Enter credentials if the login screen is present; skip if already past it."""
         try:
-            login_win = self.app.window(title_re=".*FUSIL.*", found_index=0)
-            if login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=3):
-                self.log.info("Login screen detected — entering credentials")
-                pwd = login_win.child_window(control_type="Edit", found_index=0)
-                pwd.set_focus()
-                pwd.type_keys(self.config.fusil_password, with_spaces=True)
-                time.sleep(0.4)
-                login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
-                self.log.info("Login submitted — waiting for main window")
-                time.sleep(4)
-            else:
+            # If the main window is already up, no login needed
+            if self.app.window(title_re=f".*{_MAIN_TITLE}.*").exists(timeout=2):
                 self.log.info("No login screen — already authenticated")
+                return
+
+            # Main window not found — login screen must be showing.
+            # Find whichever window contains the LOGIN button (avoids fragile title matching).
+            self.log.info("Main window not ready — looking for login screen")
+            login_win = None
+            for win in self.app.windows():
+                try:
+                    if win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=1):
+                        login_win = win
+                        break
+                except Exception:
+                    continue
+
+            if login_win is None:
+                self.log.warning("LOGIN button not found in any window — proceeding anyway")
+                return
+
+            self.log.info("Login screen detected — entering credentials")
+            edits = login_win.children(control_type="Edit")
+            # Edit index 0 = username, index 1 = password (order matches the login form)
+            if len(edits) >= 2:
+                edits[0].triple_click_input()
+                edits[0].type_keys(self.config.fusil_username, with_spaces=True)
+                time.sleep(0.2)
+                edits[1].set_focus()
+                edits[1].type_keys(self.config.fusil_password, with_spaces=True)
+            else:
+                # Fallback: single Edit field — assume it is the password field
+                edits[0].set_focus()
+                edits[0].type_keys(self.config.fusil_password, with_spaces=True)
+            time.sleep(0.4)
+            login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
+            self.log.info("Login submitted — waiting for main window")
+            time.sleep(4)
         except Exception as exc:
             self.log.warning("Login check skipped: %s", exc)
 
@@ -184,10 +210,14 @@ class FusilExporter:
     # File detection
     # ------------------------------------------------------------------
 
-    def _find_exported_file(self, report_type: str) -> Optional[Path]:
-        """Return the most-recently-modified .xlsx matching this report's filename prefix."""
+    def _find_exported_file(self, report_type: str, exported_after: float) -> Optional[Path]:
+        """Return the most-recently-modified .xlsx written after exported_after (epoch seconds).
+        Filtering by time prevents returning a stale file from a previous run."""
         folder = Path(self.config.export_folder)
-        candidates = list(folder.glob(f"{FILENAME_PREFIX[report_type]}*.xlsx"))
+        candidates = [
+            p for p in folder.glob(f"{FILENAME_PREFIX[report_type]}*.xlsx")
+            if p.stat().st_mtime >= exported_after
+        ]
         if not candidates:
             return None
         return max(candidates, key=lambda p: p.stat().st_mtime)
@@ -220,9 +250,10 @@ class FusilExporter:
             if count == -1:
                 self.log.warning("Could not read row count for %s — attempting export anyway", report_type)
 
+            export_started = time.time()
             self._trigger_export()
 
-            path = self._find_exported_file(report_type)
+            path = self._find_exported_file(report_type, exported_after=export_started)
             if path:
                 self.log.info("File found: %s", path.name)
                 self.exported_files.append({"type": report_type, "local_path": path})

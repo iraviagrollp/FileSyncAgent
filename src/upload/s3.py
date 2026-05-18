@@ -5,7 +5,6 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import boto3
 from botocore.exceptions import ClientError
 
 _IST = ZoneInfo("Asia/Kolkata")
