@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from pywinauto import Application
+from pywinauto import Application, Desktop
 from pywinauto.keyboard import send_keys
 
 from config import Config
@@ -57,20 +57,22 @@ class FusilExporter:
         self.log.info("Waiting for FUSIL to become ready (up to %ds)", _READY_TIMEOUT)
         deadline = time.time() + _READY_TIMEOUT
         login_win = None
+        desktop = Desktop(backend="uia")
 
         while time.time() < deadline:
-            # Main window already up — no login needed
-            if self.app.window(title_re=f".*{_MAIN_TITLE}.*").exists(timeout=0):
-                self.log.info("No login screen — already authenticated")
-                return
-
-            # Scan every open window for the LOGIN button
-            for win in self.app.windows():
+            # Search all desktop windows — handles child-process spawning.
+            # _MAIN_TITLE and _LOGIN_BUTTON are specific enough to avoid false matches.
+            for win in desktop.windows():
                 try:
+                    title = win.window_text()
+                    if _MAIN_TITLE in title:
+                        self.log.info("No login screen — already authenticated")
+                        return
                     if win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=0):
                         login_win = win
                         break
-                except Exception:
+                except Exception as exc:
+                    self.log.debug("Skipping window during scan: %s", exc)
                     continue
 
             if login_win:
@@ -111,7 +113,7 @@ class FusilExporter:
     def connect(self):
         self._handle_login_if_needed()
         self.log.info("Connecting to main window (%s)", _MAIN_TITLE)
-        self.main_win = self.app.window(title_re=f".*{_MAIN_TITLE}.*")
+        self.main_win = Desktop(backend="uia").window(title_re=f".*{_MAIN_TITLE}.*")
         self.main_win.wait("ready", timeout=30)
         self.main_win.set_focus()
         self.log.info("Main window ready")
@@ -136,12 +138,13 @@ class FusilExporter:
         time.sleep(_ACTION_WAIT)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
+        desktop = Desktop(backend="uia")
         current = self.main_win
         for label in menu_path:
             current.child_window(title=label, control_type="MenuItem").click_input()
             time.sleep(_MENU_WAIT)
             try:
-                current = self.app.window(control_type="Menu", found_index=0)
+                current = desktop.window(control_type="Menu", found_index=0)
             except Exception:
                 current = self.main_win
 
@@ -214,7 +217,7 @@ class FusilExporter:
         self.log.info("Waiting up to %ds for export to complete", _EXPORT_WAIT)
         time.sleep(_EXPORT_WAIT)
         try:
-            dialog = self.app.window(title="Message")
+            dialog = Desktop(backend="uia").window(title="Message")
             dialog.wait("ready", timeout=10)
             dialog.child_window(title="No", control_type="Button").click_input()
             self.log.info("Export dialog dismissed")
