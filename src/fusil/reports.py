@@ -48,7 +48,7 @@ REPORTS = [
     },
     {
         "type":       "customer_balances",
-        "menu_path":  ["Reports", "FI Finance", "Balance", "Customer Balances"],
+        "menu_path":  ["Reports", "FI Finance", "Balances", "Customer Balances"],
         "date_mode":  "as_at",
         "view_mode":  "f1",
         "export_key": "^x",
