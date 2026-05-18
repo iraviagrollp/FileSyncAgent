@@ -208,6 +208,7 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 
 ## What Is Next
 
+- [ ] Fix menu navigation — control type for FUSIL menu items unknown (running diagnostic)
 - [ ] Complete first successful end-to-end export run on FUSIL PRO server
 - [ ] Verify Purchase Return Book menu path against live FUSIL app
 - [ ] Enable S3 upload once AWS account is provisioned (`s3_upload_enabled: true`)
@@ -233,5 +234,5 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 | Config loading | Typed `Config` dataclass + `Config.load()` | Single place to see all settings; IDE autocomplete; no stringly-typed key access |
 | Modular structure | `fusil/`, `upload/`, `config.py`, `utils.py` | Separates UI automation from S3 logic; per-report config data in `reports.py` |
 | Window detection | `Desktop(backend="uia")` matching title `"Fusil"` | Actual OS window title is `"Fusil"` — `"IRAVIAGROLIFELLP"` is a label inside the window, not the OS title. Confirmed via diagnostic script. |
-| Login detection | Poll up to 30s for main window or LOGIN button | Fixed-sleep approach failed on slow server; active polling handles any startup time |
+| Login detection | Two-phase poll: title check + button check in separate try blocks | Single try block caused LOGIN button exception to silently skip the FUSIL window on every poll iteration |
 | Stale file prevention | Filter exported files by `st_mtime >= export_started` | Prevents returning a file from a prior run if the current export silently fails |

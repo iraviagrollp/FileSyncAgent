@@ -16,7 +16,7 @@ _FUSIL_TITLE = "Fusil"
 _LOGIN_BUTTON = "LOGIN"
 
 # Timing constants (seconds) — increase on a slow machine
-_READY_TIMEOUT = 30  # max seconds to wait for FUSIL main/login window to appear
+_READY_TIMEOUT = 60  # max seconds to wait for FUSIL main/login window to appear
 _ACTION_WAIT = 1.5   # between UI steps
 _EXPORT_WAIT = 12    # after Ctrl+X, waiting for file to be written
 _VIEW_WAIT = 3       # after clicking View, waiting for data to load
@@ -62,19 +62,33 @@ class FusilExporter:
 
         while time.time() < deadline:
             for win in desktop.windows():
+                # Step 1: title check — its own try so a bad window doesn't
+                # prevent us from scanning the rest
                 try:
                     if win.window_text() != _FUSIL_TITLE:
                         continue
-                    # Found the FUSIL window
-                    if win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=0):
-                        self.log.info("Login screen detected — entering credentials")
-                        self._do_login(win)
-                    else:
-                        self.log.info("FUSIL ready — already authenticated")
-                    return
                 except Exception as exc:
-                    self.log.debug("Window scan error: %s", exc)
+                    self.log.debug("Could not read window title: %s", exc)
                     continue
+
+                # Step 2: FUSIL window found — login check in a separate try
+                # so an exception here does NOT skip the window
+                self.log.info("FUSIL window found (pid=%s)", win.process_id())
+                has_login = False
+                try:
+                    has_login = win.child_window(
+                        title=_LOGIN_BUTTON, control_type="Button"
+                    ).exists(timeout=1)
+                except Exception as exc:
+                    self.log.debug("LOGIN button check failed: %s", exc)
+
+                if has_login:
+                    self.log.info("Login screen detected — entering credentials")
+                    self._do_login(win)
+                else:
+                    self.log.info("No login screen — already authenticated")
+                return
+
             time.sleep(1)
 
         self.log.warning("FUSIL window not found within %ds — proceeding anyway", _READY_TIMEOUT)
@@ -121,7 +135,7 @@ class FusilExporter:
         Navigate a menu path such as ["Reports", "RGF", "Sales", "RGF Sales Book"].
         Tries pywinauto's menu_select first; falls back to clicking items one by one.
         """
-        self.log.info("Menu: %s", " → ".join(menu_path))
+        self.log.info("Menu: %s", " -> ".join(menu_path))
         self.main_win.set_focus()
         time.sleep(0.3)
         try:

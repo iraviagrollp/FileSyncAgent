@@ -1,81 +1,71 @@
 """
-FUSIL diagnostic — run this with FUSIL already open (login screen visible).
-DO NOT run via the agent — open FUSIL manually first, then run this script.
+FUSIL diagnostic — run with FUSIL open on the MAIN SCREEN (logged in, menu visible).
 
 Usage:
-    python scripts\diagnose_fusil.py
+    python scripts\\diagnose_fusil.py
 
 Paste the full output back to Claude.
 """
 import sys
-import time
-
 print(f"Python: {sys.version}")
-print(f"Platform: {sys.platform}\n")
 
-try:
-    import pywinauto
-    print(f"pywinauto: {pywinauto.__version__}\n")
-except Exception as e:
-    print(f"pywinauto import failed: {e}")
+from pywinauto import Desktop
+
+desktop = Desktop(backend="uia")
+
+# ── 1. Find the FUSIL window ──────────────────────────────────────────────
+fusil_wins = [w for w in desktop.windows() if w.window_text() == "Fusil"]
+print(f"\nFUSIL windows found: {len(fusil_wins)}")
+for w in fusil_wins:
+    print(f"  pid={w.process_id()}  title={repr(w.window_text())}  class={repr(w.class_name())}")
+
+if not fusil_wins:
+    print("No window titled 'Fusil' found — is FUSIL open?")
     sys.exit(1)
 
-from pywinauto import Application, Desktop
+win = fusil_wins[0]
 
-# ── 1. All top-level windows (both backends) ──────────────────────────────
-for backend in ("uia", "win32"):
-    print(f"=== Desktop({backend!r}).windows() ===")
-    try:
-        wins = Desktop(backend=backend).windows()
-        print(f"  Total windows found: {len(wins)}")
-        for w in wins:
-            try:
-                print(f"  pid={w.process_id():6d}  title={repr(w.window_text()):<40}  class={repr(w.class_name())}")
-            except Exception as e:
-                print(f"  [error reading window props: {e}]")
-    except Exception as e:
-        print(f"  FAILED: {e}")
-    print()
-
-# ── 2. Connect by exe name (both backends) ────────────────────────────────
-for backend in ("uia", "win32"):
-    print(f"=== Application({backend!r}).connect(path='FUSILINFINITY.exe') ===")
-    try:
-        app = Application(backend=backend).connect(path="FUSILINFINITY.exe")
-        wins = app.windows()
-        print(f"  Connected. Windows in process: {len(wins)}")
-        for w in wins:
-            try:
-                print(f"  title={repr(w.window_text())}  class={repr(w.class_name())}")
-            except Exception as e:
-                print(f"  [error: {e}]")
-    except Exception as e:
-        print(f"  FAILED: {e}")
-    print()
-
-# ── 3. Full control tree of any FUSIL-related window ─────────────────────
-print("=== Control tree of FUSIL windows (uia backend) ===")
+# ── 2. Direct children of the main window ────────────────────────────────
+print("\n=== Direct children of FUSIL window ===")
 try:
-    desktop = Desktop(backend="uia")
-    fusil_wins = [
-        w for w in desktop.windows()
-        if "FUSIL" in (w.window_text() or "") or "IRAVI" in (w.window_text() or "")
-    ]
-    if not fusil_wins:
-        print("  No windows with FUSIL or IRAVI in title found.")
-        print("  Trying all windows with non-empty title...")
-        fusil_wins = [w for w in desktop.windows() if w.window_text()]
-
-    for win in fusil_wins[:3]:  # cap at 3 to avoid flooding output
-        print(f"\n  Window: {repr(win.window_text())} (pid={win.process_id()})")
+    for ctrl in win.children():
         try:
-            for ctrl in win.descendants():
-                try:
-                    print(f"    [{ctrl.control_type():<20}] title={repr(ctrl.window_text()):<30} auto_id={repr(ctrl.automation_id())}")
-                except Exception:
-                    pass
+            print(f"  [{ctrl.control_type():<22}] title={repr(ctrl.window_text())}")
         except Exception as e:
-            print(f"    descendants() failed: {e}")
+            print(f"  [error: {e}]")
+except Exception as e:
+    print(f"  FAILED: {e}")
+
+# ── 3. All descendants — first 80, focused on menu/toolbar ───────────────
+print("\n=== All descendants (menu/toolbar/button types highlighted) ===")
+MENU_TYPES = {"MenuBar", "MenuItem", "Menu", "ToolBar", "Button", "Custom"}
+try:
+    count = 0
+    for ctrl in win.descendants():
+        count += 1
+        if count > 120:
+            print("  ... (truncated at 120)")
+            break
+        try:
+            ct = ctrl.control_type()
+            title = ctrl.window_text()
+            marker = " <<" if ct in MENU_TYPES or title in ("Reports", "Masters", "File", "Transactions") else ""
+            print(f"  [{ct:<22}] title={repr(title):<35} auto_id={repr(ctrl.automation_id())}{marker}")
+        except Exception as e:
+            print(f"  [error reading ctrl: {e}]")
+except Exception as e:
+    print(f"  FAILED: {e}")
+
+# ── 4. Specifically look for anything with menu-related text ─────────────
+print("\n=== Controls whose title contains Reports / Masters / File ===")
+try:
+    for ctrl in win.descendants():
+        try:
+            title = ctrl.window_text()
+            if any(kw in title for kw in ("Reports", "Masters", "File", "Transactions", "Settings")):
+                print(f"  [{ctrl.control_type():<22}] title={repr(title)}  auto_id={repr(ctrl.automation_id())}")
+        except Exception:
+            pass
 except Exception as e:
     print(f"  FAILED: {e}")
 
