@@ -173,6 +173,9 @@ s3://{bucket}/
 **Menu navigation fails**
 → Check logs for `menu_select failed` — the agent falls back to manual clicks automatically. If both fail, the report is logged as failed and an SNS alert is sent.
 
+**Date fields not found / View uses wrong date**
+→ Report screen took too long to load. The agent waits 5s after navigation. If still failing on this machine, increase `time.sleep(5)` in `_navigate_menu` in `src/fusil/exporter.py`.
+
 **No exported file found after export step**
 → Confirm `export_folder` in `config.json` matches the folder FUSIL actually writes to. Export manually in FUSIL and check where the file appears.
 

@@ -212,10 +212,10 @@ When no data exists, FUSIL also shows a "Data not found for given options." dial
 
 - [ ] Fix menu navigation — control type for FUSIL menu items unknown (running diagnostic)
 - [x] Complete first successful end-to-end export run on FUSIL PRO server (sale report confirmed working 2026-05-18)
-- [ ] Verify Purchase Return Book menu path against live FUSIL app
 - [ ] Enable S3 upload once AWS account is provisioned (`s3_upload_enabled: true`)
 - [ ] Write `scripts/install.ps1`
 - [ ] Write unit tests
+- [ ] Full end-to-end test with all 7 reports on a date with data
 
 ---
 

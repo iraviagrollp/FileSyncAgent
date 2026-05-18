@@ -192,6 +192,9 @@ class FusilExporter:
         self.main_win.set_focus()
         self._open_hamburger_menu()
         self._navigate_menu_by_clicks(menu_path)
+        # Wait for the report screen to fully render before _set_dates runs
+        self.log.info("Waiting 5s for report screen to load")
+        time.sleep(5)
 
     def _find_by_descendants(self, win, auto_id: str = "", title: str = "") -> object:
         """
