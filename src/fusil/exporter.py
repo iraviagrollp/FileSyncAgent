@@ -193,51 +193,48 @@ class FusilExporter:
         self._open_hamburger_menu()
         self._navigate_menu_by_clicks(menu_path)
 
+    def _find_by_descendants(self, win, auto_id: str = "", title: str = "") -> object:
+        """
+        Find a control by iterating descendants — more reliable than child_window()
+        for 32-bit .NET apps under 64-bit UIA where child_window() criteria fail.
+        """
+        for ctrl in win.descendants():
+            try:
+                if auto_id and ctrl.automation_id() == auto_id:
+                    return ctrl
+                if title and not auto_id and ctrl.window_text() == title:
+                    return ctrl
+            except Exception:
+                continue
+        return None
+
     def _open_hamburger_menu(self):
-        """Click the ≡ hamburger MenuItem (auto_id='MainMenu') to open the nav panel."""
-        try:
-            # Resolve each step explicitly — mirrors the manual test that confirmed working.
-            # Chaining unresolved WindowSpecification objects behaves differently.
-            container = self.main_win.child_window(auto_id="MainMenu1")
-            self.log.info("MainMenu1 exists: %s", container.exists(timeout=2))
-            hamburger = container.child_window(auto_id="MainMenu")
-            self.log.info("MainMenu exists: %s", hamburger.exists(timeout=2))
-            hamburger.click_input()
+        """Click the ≡ hamburger (auto_id='MainMenu') using descendants() iteration."""
+        ctrl = self._find_by_descendants(self.main_win, auto_id="MainMenu")
+        if ctrl:
+            ctrl.click_input()
             self.log.info("Hamburger menu opened")
             time.sleep(_MENU_WAIT)
-        except Exception as exc:
-            self.log.warning("Hamburger click failed: %s — proceeding anyway", exc)
+        else:
+            self.log.warning("Hamburger not found via descendants — proceeding anyway")
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
-        Click each item in menu_path in sequence.
-        Top-level items (File, Reports, Masters …) have auto_id == their title.
-        Sub-menu items appear in Desktop popup windows and are found by title.
+        Click each item in menu_path using descendants() iteration.
+        child_window() criteria fail for virtual UIA elements in this 32-bit app.
+        After each click, check if a popup submenu appears on the Desktop.
         """
         desktop = Desktop(backend="uia")
         current = self.main_win
 
         for label in menu_path:
-            clicked = False
-            for kwargs in [
-                {"auto_id": label},              # top-level items match auto_id to title
-                {"title": label},                # sub-menu items in popup: find by title
-                {"title": label, "control_type": "MenuItem"},
-            ]:
-                try:
-                    ctrl = current.child_window(**kwargs)
-                    if ctrl.exists(timeout=2):
-                        ctrl.click_input()
-                        time.sleep(_MENU_WAIT)
-                        clicked = True
-                        break
-                except Exception:
-                    continue
-
-            if not clicked:
+            ctrl = self._find_by_descendants(current, title=label)
+            if ctrl is None:
                 raise RuntimeError(f"Menu item not found: '{label}'")
+            ctrl.click_input()
+            time.sleep(_MENU_WAIT)
 
-            # After each click, check if a submenu popup appeared on the Desktop
+            # After each click, check if a submenu popup appeared
             try:
                 popup = desktop.window(control_type="Menu", found_index=0)
                 if popup.exists(timeout=1):
