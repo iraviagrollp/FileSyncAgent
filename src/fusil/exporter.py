@@ -163,7 +163,22 @@ class FusilExporter:
         self.main_win = Desktop(backend="uia").window(title=_FUSIL_TITLE)
         self.main_win.wait("ready", timeout=30)
         self.main_win.set_focus()
-        self.log.info("Main window ready")
+
+        # Wait for the navigation controls to appear in the UIA tree.
+        # main_win.wait("ready") only checks the window exists — FUSIL's
+        # menu controls (MainMenu1) take additional time to load after login.
+        self.log.info("Waiting for navigation controls to load")
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            try:
+                if self.main_win.child_window(auto_id="MainMenu1").exists(timeout=0):
+                    self.log.info("Navigation controls ready")
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        else:
+            self.log.warning("Navigation controls did not appear within 20s — proceeding anyway")
 
     # ------------------------------------------------------------------
     # Menu navigation
