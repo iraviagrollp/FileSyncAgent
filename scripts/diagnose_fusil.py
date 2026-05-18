@@ -1,49 +1,82 @@
 """
-Diagnostic script — run this with FUSIL already open (login screen visible).
-Prints everything pywinauto can see so we can fix the detection logic.
+FUSIL diagnostic — run this with FUSIL already open (login screen visible).
+DO NOT run via the agent — open FUSIL manually first, then run this script.
 
 Usage:
     python scripts\diagnose_fusil.py
+
+Paste the full output back to Claude.
 """
 import sys
 import time
+
+print(f"Python: {sys.version}")
+print(f"Platform: {sys.platform}\n")
+
+try:
+    import pywinauto
+    print(f"pywinauto: {pywinauto.__version__}\n")
+except Exception as e:
+    print(f"pywinauto import failed: {e}")
+    sys.exit(1)
+
 from pywinauto import Application, Desktop
 
-print("\n=== STEP 1: All visible top-level windows ===")
-desktop = Desktop(backend="uia")
-for win in desktop.windows():
+# ── 1. All top-level windows (both backends) ──────────────────────────────
+for backend in ("uia", "win32"):
+    print(f"=== Desktop({backend!r}).windows() ===")
     try:
-        print(f"  title={repr(win.window_text())}  class={repr(win.class_name())}  visible={win.is_visible()}")
+        wins = Desktop(backend=backend).windows()
+        print(f"  Total windows found: {len(wins)}")
+        for w in wins:
+            try:
+                print(f"  pid={w.process_id():6d}  title={repr(w.window_text()):<40}  class={repr(w.class_name())}")
+            except Exception as e:
+                print(f"  [error reading window props: {e}]")
     except Exception as e:
-        print(f"  [error reading window: {e}]")
+        print(f"  FAILED: {e}")
+    print()
 
-print("\n=== STEP 2: Try connecting to FUSIL process by exe name ===")
-try:
-    app = Application(backend="uia").connect(path="FUSILINFINITY.exe")
-    print("  Connected via process name.")
-    wins = app.windows()
-    print(f"  Windows found: {len(wins)}")
-    for w in wins:
-        try:
-            print(f"    title={repr(w.window_text())}  class={repr(w.class_name())}")
-        except Exception as e:
-            print(f"    [error: {e}]")
-except Exception as e:
-    print(f"  Failed: {e}")
+# ── 2. Connect by exe name (both backends) ────────────────────────────────
+for backend in ("uia", "win32"):
+    print(f"=== Application({backend!r}).connect(path='FUSILINFINITY.exe') ===")
+    try:
+        app = Application(backend=backend).connect(path="FUSILINFINITY.exe")
+        wins = app.windows()
+        print(f"  Connected. Windows in process: {len(wins)}")
+        for w in wins:
+            try:
+                print(f"  title={repr(w.window_text())}  class={repr(w.class_name())}")
+            except Exception as e:
+                print(f"  [error: {e}]")
+    except Exception as e:
+        print(f"  FAILED: {e}")
+    print()
 
-print("\n=== STEP 3: Dump all descendants of each FUSIL window ===")
+# ── 3. Full control tree of any FUSIL-related window ─────────────────────
+print("=== Control tree of FUSIL windows (uia backend) ===")
 try:
-    app = Application(backend="uia").connect(path="FUSILINFINITY.exe")
-    for win in app.windows():
+    desktop = Desktop(backend="uia")
+    fusil_wins = [
+        w for w in desktop.windows()
+        if "FUSIL" in (w.window_text() or "") or "IRAVI" in (w.window_text() or "")
+    ]
+    if not fusil_wins:
+        print("  No windows with FUSIL or IRAVI in title found.")
+        print("  Trying all windows with non-empty title...")
+        fusil_wins = [w for w in desktop.windows() if w.window_text()]
+
+    for win in fusil_wins[:3]:  # cap at 3 to avoid flooding output
+        print(f"\n  Window: {repr(win.window_text())} (pid={win.process_id()})")
         try:
-            title = win.window_text()
-            print(f"\n  Window: {repr(title)}")
             for ctrl in win.descendants():
                 try:
-                    print(f"    [{ctrl.control_type()}]  title={repr(ctrl.window_text())}  auto_id={repr(ctrl.automation_id())}")
+                    print(f"    [{ctrl.control_type():<20}] title={repr(ctrl.window_text()):<30} auto_id={repr(ctrl.automation_id())}")
                 except Exception:
                     pass
         except Exception as e:
-            print(f"  [error: {e}]")
+            print(f"    descendants() failed: {e}")
 except Exception as e:
-    print(f"  Failed: {e}")
+    print(f"  FAILED: {e}")
+
+print("\n=== Done — paste everything above back to Claude ===")
