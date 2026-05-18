@@ -15,11 +15,11 @@ _MAIN_TITLE = "IRAVIAGROLIFELLP"
 _LOGIN_BUTTON = "LOGIN"
 
 # Timing constants (seconds) — increase on a slow machine
-_LAUNCH_WAIT = 6    # after exe starts, before any interaction
-_ACTION_WAIT = 1.5  # between UI steps
-_EXPORT_WAIT = 12   # after Ctrl+X, waiting for file to be written
-_VIEW_WAIT = 3      # after clicking View, waiting for data to load
-_MENU_WAIT = 0.8    # between individual menu clicks (fallback path)
+_READY_TIMEOUT = 30  # max seconds to wait for FUSIL main/login window to appear
+_ACTION_WAIT = 1.5   # between UI steps
+_EXPORT_WAIT = 12    # after Ctrl+X, waiting for file to be written
+_VIEW_WAIT = 3       # after clicking View, waiting for data to load
+_MENU_WAIT = 0.8     # between individual menu clicks (fallback path)
 
 
 class FusilExporter:
@@ -45,45 +45,57 @@ class FusilExporter:
             self.config.fusil_exe_path,
             wait_for_idle=False,
         )
-        self.log.info("Waiting %ds for FUSIL to initialise", _LAUNCH_WAIT)
-        time.sleep(_LAUNCH_WAIT)
+        # Small initial pause — give the OS time to create the process window
+        # before we start polling. The real wait happens in _handle_login_if_needed.
+        time.sleep(2)
 
     def _handle_login_if_needed(self):
-        """Enter credentials if the login screen is present; skip if already past it."""
-        try:
-            # If the main window is already up, no login needed
-            if self.app.window(title_re=f".*{_MAIN_TITLE}.*").exists(timeout=2):
+        """
+        Poll until either the main window or the login screen is accessible (up to
+        _READY_TIMEOUT seconds). Handles machines where FUSIL takes a while to render.
+        """
+        self.log.info("Waiting for FUSIL to become ready (up to %ds)", _READY_TIMEOUT)
+        deadline = time.time() + _READY_TIMEOUT
+        login_win = None
+
+        while time.time() < deadline:
+            # Main window already up — no login needed
+            if self.app.window(title_re=f".*{_MAIN_TITLE}.*").exists(timeout=0):
                 self.log.info("No login screen — already authenticated")
                 return
 
-            # Main window not found — login screen must be showing.
-            # Find whichever window contains the LOGIN button (avoids fragile title matching).
-            self.log.info("Main window not ready — looking for login screen")
-            login_win = None
+            # Scan every open window for the LOGIN button
             for win in self.app.windows():
                 try:
-                    if win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=1):
+                    if win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=0):
                         login_win = win
                         break
                 except Exception:
                     continue
 
-            if login_win is None:
-                self.log.warning("LOGIN button not found in any window — proceeding anyway")
-                return
+            if login_win:
+                break
+            time.sleep(1)
 
-            self.log.info("Login screen detected — entering credentials")
-            # Use descendants() not children() — the Edit controls are inside a nested panel
+        if login_win is None:
+            self.log.warning(
+                "Neither main window nor login screen appeared within %ds — proceeding",
+                _READY_TIMEOUT,
+            )
+            return
+
+        self.log.info("Login screen detected — entering credentials")
+        try:
+            # Use descendants() — Edit controls are inside a nested panel, not direct children
             edits = login_win.descendants(control_type="Edit")
             if len(edits) >= 2:
-                # index 0 = username, index 1 = password (top-to-bottom order in the form)
+                # index 0 = username, index 1 = password (top-to-bottom in the form)
                 edits[0].triple_click_input()
                 edits[0].type_keys(self.config.fusil_username, with_spaces=True)
                 time.sleep(0.2)
                 edits[1].set_focus()
                 edits[1].type_keys(self.config.fusil_password, with_spaces=True)
             elif len(edits) == 1:
-                # Only password field visible — username already pre-filled
                 edits[0].set_focus()
                 edits[0].type_keys(self.config.fusil_password, with_spaces=True)
             else:
@@ -94,7 +106,7 @@ class FusilExporter:
             self.log.info("Login submitted — waiting for main window")
             time.sleep(4)
         except Exception as exc:
-            self.log.warning("Login check skipped: %s", exc)
+            self.log.warning("Login credential entry failed: %s", exc)
 
     def connect(self):
         self._handle_login_if_needed()

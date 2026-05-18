@@ -164,8 +164,8 @@ s3://{bucket}/
 
 ## Troubleshooting
 
-**Login screen not detected / agent skips login**
-→ Fixed in latest version (uses `descendants()` to find nested form fields). Pull latest and retry.
+**Login screen not detected / agent times out on connect**
+→ Agent polls up to 30s for FUSIL to become ready. If it still fails, FUSIL may be taking unusually long — check if the machine is under load or if FUSIL requires a manual step to start.
 
 **Menu navigation fails**
 → Check logs for `menu_select failed` — the agent falls back to manual clicks automatically. If both fail, the report is logged as failed and an SNS alert is sent.
