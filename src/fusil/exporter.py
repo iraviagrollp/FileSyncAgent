@@ -352,22 +352,37 @@ class FusilExporter:
         self.log.info("View loaded")
 
     def _trigger_export(self, export_key: str = "^x"):
-        """Press the export shortcut and dismiss the success dialog."""
+        """Press the export shortcut and dismiss any dialogs that follow.
+
+        Ctrl+X (standard): FUSIL exports directly and shows a "success" dialog.
+        Ctrl+O (Customer Accounts): FUSIL shows a Save As dialog; press Enter to
+        accept the pre-filled filename and export folder, then waits for the file.
+        """
         key_label = export_key.replace("^", "Ctrl+").upper()
         self.log.info("Exporting (%s)", key_label)
         self.main_win.set_focus()
         send_keys(export_key)
+
+        # Ctrl+O opens a Save As dialog — accept with Enter
+        if export_key == "^o":
+            try:
+                save_dialog = Desktop(backend="uia").window(title="Save As")
+                if save_dialog.exists(timeout=5):
+                    self.log.info("Save As dialog found — pressing Enter to accept")
+                    send_keys("{ENTER}")
+                    time.sleep(2)
+            except Exception as exc:
+                self.log.warning("Could not handle Save As dialog: %s", exc)
+
         self.log.info("Waiting up to %ds for export to complete", _EXPORT_WAIT)
         time.sleep(_EXPORT_WAIT)
+
         # Dismiss "Export file generated successfully. Do you want open the file?"
-        # dialog is a child of main_win — use descendants() like all other dialogs.
         try:
             no_btn = self._find_by_descendants(self.main_win, title="No")
             if no_btn:
                 no_btn.click_input()
                 self.log.info("Export dialog dismissed")
-            else:
-                self.log.warning("Export dialog 'No' button not found")
         except Exception as exc:
             self.log.warning("Could not dismiss export dialog: %s", exc)
         time.sleep(1)

@@ -233,6 +233,7 @@ When no data exists, FUSIL also shows a "Data not found for given options." dial
 | Retry strategy | Exponential backoff | Handles transient S3/network errors |
 | No-data handling | Read `Count=N` status bar after View | FUSIL blocks export on empty results; skip gracefully without alerting |
 | Per-report config | `date_mode`, `view_mode`, `export_key` in reports.py | Stocks/Customer Accounts have no dates; Customer Balances has single "As At Date"; Customer Accounts uses Ctrl+O and auto-loads data |
+| Customer Accounts export | Ctrl+O opens Save As dialog → press Enter to accept | Ctrl+O unlike Ctrl+X doesn't export directly; it shows a Save As dialog with pre-filled path — Enter accepts it |
 | Error vs no-data | Separate `failed_reports` / `no_data_reports` lists | Only real errors trigger SNS; no-data is an expected business scenario |
 | Config loading | Typed `Config` dataclass + `Config.load()` | Single place to see all settings; IDE autocomplete; no stringly-typed key access |
 | Modular structure | `fusil/`, `upload/`, `config.py`, `utils.py` | Separates UI automation from S3 logic; per-report config data in `reports.py` |
