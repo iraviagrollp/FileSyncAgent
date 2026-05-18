@@ -7,13 +7,30 @@ REPORTS = [
         "type": "sale",
         "menu_path": ["Reports", "RGF", "Sales", "RGF Sales Book"],
     },
-    # --- temporarily disabled for focused testing ---
-    # {"type": "sale_returns",     "menu_path": ["Reports", "RGF", "Sales", "RGF Sales Return Book"]},
-    # {"type": "purchase",         "menu_path": ["Reports", "RGF", "Purchase", "RGF Purchase Book"]},
-    # {"type": "purchase_returns", "menu_path": ["Reports", "RGF", "Purchase", "RGF Purchase Return Book"]},
-    # {"type": "stocks",           "menu_path": ["Reports", "RGF", "Stock Reports", "RGF Current Stock Balances"]},
-    # {"type": "customer_balances","menu_path": ["Reports", "FI Finance", "Balance", "Customer Balances"]},
-    # {"type": "customer_accounts","menu_path": ["Masters", "General", "Customer Accounts"]},
+    {
+        "type": "sale_returns",
+        "menu_path": ["Reports", "RGF", "Sales", "RGF Sales Return Book"],
+    },
+    {
+        "type": "purchase",
+        "menu_path": ["Reports", "RGF", "Purchase", "RGF Purchase Book"],
+    },
+    {
+        "type": "purchase_returns",
+        "menu_path": ["Reports", "RGF", "Purchase", "RGF Purchase Return Book"],
+    },
+    {
+        "type": "stocks",
+        "menu_path": ["Reports", "RGF", "Stock Reports", "RGF Current Stock Balances"],
+    },
+    {
+        "type": "customer_balances",
+        "menu_path": ["Reports", "FI Finance", "Balance", "Customer Balances"],
+    },
+    {
+        "type": "customer_accounts",
+        "menu_path": ["Masters", "General", "Customer Accounts"],
+    },
 ]
 
 # Leading prefix of each exported filename — used to locate the file after export.
