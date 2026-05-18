@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 _IST = ZoneInfo("Asia/Kolkata")
 
@@ -25,7 +25,7 @@ def upload_with_retry(
             s3_client.head_object(Bucket=bucket, Key=s3_key)
             log.info("Uploaded: %s", s3_key)
             return True
-        except ClientError as exc:
+        except (ClientError, BotoCoreError, OSError) as exc:
             log.warning("Upload attempt %d/%d failed — %s: %s", attempt, max_retries, s3_key, exc)
             if attempt < max_retries:
                 wait = backoff_base ** attempt

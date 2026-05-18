@@ -73,18 +73,22 @@ class FusilExporter:
                 return
 
             self.log.info("Login screen detected — entering credentials")
-            edits = login_win.children(control_type="Edit")
-            # Edit index 0 = username, index 1 = password (order matches the login form)
+            # Use descendants() not children() — the Edit controls are inside a nested panel
+            edits = login_win.descendants(control_type="Edit")
             if len(edits) >= 2:
+                # index 0 = username, index 1 = password (top-to-bottom order in the form)
                 edits[0].triple_click_input()
                 edits[0].type_keys(self.config.fusil_username, with_spaces=True)
                 time.sleep(0.2)
                 edits[1].set_focus()
                 edits[1].type_keys(self.config.fusil_password, with_spaces=True)
-            else:
-                # Fallback: single Edit field — assume it is the password field
+            elif len(edits) == 1:
+                # Only password field visible — username already pre-filled
                 edits[0].set_focus()
                 edits[0].type_keys(self.config.fusil_password, with_spaces=True)
+            else:
+                self.log.warning("No Edit controls found on login screen — skipping credential entry")
+                return
             time.sleep(0.4)
             login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
             self.log.info("Login submitted — waiting for main window")
@@ -114,8 +118,8 @@ class FusilExporter:
         time.sleep(0.3)
         try:
             self.main_win.menu_select("->".join(menu_path))
-        except Exception:
-            self.log.debug("menu_select failed — using manual clicks")
+        except Exception as exc:
+            self.log.info("menu_select failed (%s) — using manual clicks", exc)
             self._navigate_menu_by_clicks(menu_path)
         time.sleep(_ACTION_WAIT)
 

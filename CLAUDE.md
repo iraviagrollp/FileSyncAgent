@@ -60,20 +60,21 @@ FileSyncAgent/
 
 ## Source Files (exported by agent from FUSIL PRO)
 
-The agent drives FUSIL to export **8 Excel files** each evening.
+The agent drives FUSIL to export **7 Excel files** each evening.
+Note: there is no Expenses report — original spec was incorrect.
+Date format in filenames: `DD-M-YYYY` (no leading zero on month, e.g. `17-5-2026`).
 
 ### File naming patterns
 
 | # | Type | Filename pattern |
 |---|---|---|
-| 1 | sale | `RGF Sales Book{DD-MM-YYYY}({H.MM.SS}).xlsx` |
-| 2 | sale_returns | `RGF Sales Return Book{DD-MM-YYYY}({H.MM.SS}).xlsx` |
-| 3 | purchase | `RGF Purchase Book{DD-MM-YYYY}({H.MM.SS}).xlsx` |
-| 4 | purchase_returns | `RGF Purchase Return Report{DD-MM-YYYY}({H.MM.SS}).xlsx` |
-| 5 | expenses | `RGF Expenses*{DD-MM-YYYY}({H.MM.SS}).xlsx` |
-| 6 | stocks | `Stocks.xlsx` (no date in filename) |
-| 7 | customer_accounts | `Customer Accounts Export File{DD-MM-YYYY}({H.MM.SS}).xlsx` |
-| 8 | customer_balances | `Customer Balances{DD-MM-YYYY}({H.MM.SS}).xlsx` |
+| 1 | sale | `RGF Sales Book{DD-M-YYYY}({H.MM.SS}).xlsx` |
+| 2 | sale_returns | `RGF Sales Return Book{DD-M-YYYY}({H.MM.SS}).xlsx` |
+| 3 | purchase | `RGF Purchase Book{DD-M-YYYY}({H.MM.SS}).xlsx` |
+| 4 | purchase_returns | `RGF Purchase Return Book{DD-M-YYYY}({H.MM.SS}).xlsx` |
+| 5 | stocks | `RGF Current Stock Balances{DD-M-YYYY}({H.MM.SS}).xlsx` |
+| 6 | customer_accounts | `Customer Accounts Export File{DD-M-YYYY}({H.MM.SS}).xlsx` |
+| 7 | customer_balances | `Customer Balances{DD-M-YYYY}({H.MM.SS}).xlsx` |
 
 ---
 
@@ -171,7 +172,6 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 
 ## Open Questions
 
-- [ ] Is Python installed on the FUSIL PRO server? Which version and path?
 - [ ] Should the agent **delete/archive** local files after successful S3 upload?
 
 ---
@@ -193,20 +193,26 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 - [x] README.md with deployment runbook
 - [x] `config/config.example.json`
 - [x] `requirements.txt` (boto3, pywinauto, comtypes, tzdata)
-- [x] `src/` — modular structure (main.py, utils.py, fusil/, upload/)
+- [x] `src/` — modular structure (main.py, config.py, utils.py, fusil/, upload/)
   - [x] All 7 report menu paths wired up in `fusil/reports.py`
   - [x] No-data detection via `Count=N` status bar (skip without alert)
   - [x] S3 upload disabled via `s3_upload_enabled: false` flag
+  - [x] Stale file prevention — `_find_exported_file` filters by `st_mtime >= export_started`
+  - [x] Login detection fixed — checks for main window absence; uses `descendants()` for nested form fields
+  - [x] S3 upload catches `BotoCoreError` and `OSError` in addition to `ClientError`
+- [x] Deployed to FUSIL PRO server (`D:\Iravi InHouse\Software\FileSyncAgent`) — first test run attempted
+- [x] `flows/setup-and-run.html` — setup and run guide
+- [x] `flows/architecture.html` — system architecture diagram
 - [ ] `scripts/install.ps1` — Task Scheduler setup
 - [ ] `tests/test_file_sync_agent.py`
 
 ## What Is Next
 
-- [ ] Test `--force` run on FUSIL PRO machine (run once manually and watch logs)
-- [ ] Confirm Purchase Return Book menu path (spreadsheet had a typo — verify against live app)
+- [ ] Complete first successful end-to-end export run on FUSIL PRO server
+- [ ] Verify Purchase Return Book menu path against live FUSIL app
+- [ ] Enable S3 upload once AWS account is provisioned (`s3_upload_enabled: true`)
 - [ ] Write `scripts/install.ps1`
 - [ ] Write unit tests
-- [ ] Full end-to-end test on server
 
 ---
 
@@ -224,3 +230,7 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 | Retry strategy | Exponential backoff | Handles transient S3/network errors |
 | No-data handling | Read `Count=N` status bar after View | FUSIL blocks export on empty results; skip gracefully without alerting |
 | Error vs no-data | Separate `failed_reports` / `no_data_reports` lists | Only real errors trigger SNS; no-data is an expected business scenario |
+| Config loading | Typed `Config` dataclass + `Config.load()` | Single place to see all settings; IDE autocomplete; no stringly-typed key access |
+| Modular structure | `fusil/`, `upload/`, `config.py`, `utils.py` | Separates UI automation from S3 logic; per-report config data in `reports.py` |
+| Login detection | Check main window absence, scan all windows for LOGIN button | Avoids fragile title matching; `descendants()` handles nested form panels |
+| Stale file prevention | Filter exported files by `st_mtime >= export_started` | Prevents returning a file from a prior run if the current export silently fails |
