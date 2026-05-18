@@ -179,41 +179,29 @@ class FusilExporter:
         self._navigate_menu_by_clicks(menu_path)
 
     def _open_hamburger_menu(self):
-        """Click the ≡ button in the title bar to open the navigation panel."""
-        # Try known hamburger button titles/characters, then fall back to first button
-        for kwargs in [
-            {"title": "≡"},
-            {"title": "☰"},
-            {"title": "Menu"},
-            {"control_type": "Button", "found_index": 0},
-        ]:
-            try:
-                btn = self.main_win.child_window(**kwargs)
-                if btn.exists(timeout=1):
-                    btn.click_input()
-                    self.log.info("Hamburger menu opened")
-                    time.sleep(_MENU_WAIT)
-                    return
-            except Exception:
-                continue
-        self.log.warning("Hamburger button not found — proceeding anyway")
+        """Click the ≡ hamburger MenuItem (auto_id='MainMenu') to open the nav panel."""
+        try:
+            self.main_win.child_window(auto_id="MainMenu").click_input()
+            self.log.info("Hamburger menu opened")
+            time.sleep(_MENU_WAIT)
+        except Exception as exc:
+            self.log.warning("Hamburger click failed: %s — proceeding anyway", exc)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
         Click each item in menu_path in sequence.
-        Searches by title only — no control_type constraint — because FUSIL's
-        hamburger navigation panel exposes items as non-standard control types.
-        After each click tries to find a newly-opened submenu popup on the Desktop.
+        Top-level items (File, Reports, Masters …) have auto_id == their title.
+        Sub-menu items appear in Desktop popup windows and are found by title.
         """
         desktop = Desktop(backend="uia")
         current = self.main_win
+
         for label in menu_path:
             clicked = False
             for kwargs in [
-                {"title": label},
+                {"auto_id": label},              # top-level items match auto_id to title
+                {"title": label},                # sub-menu items in popup: find by title
                 {"title": label, "control_type": "MenuItem"},
-                {"title": label, "control_type": "ListItem"},
-                {"title": label, "control_type": "Custom"},
             ]:
                 try:
                     ctrl = current.child_window(**kwargs)
@@ -228,7 +216,7 @@ class FusilExporter:
             if not clicked:
                 raise RuntimeError(f"Menu item not found: '{label}'")
 
-            # After each click, check if a submenu popup appeared
+            # After each click, check if a submenu popup appeared on the Desktop
             try:
                 popup = desktop.window(control_type="Menu", found_index=0)
                 if popup.exists(timeout=1):
