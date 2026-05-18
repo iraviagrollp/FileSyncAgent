@@ -13,7 +13,7 @@ from pathlib import Path
 import boto3
 
 from config import Config
-from fusil.exporter import FusilExporter
+from fusil.exporter import FusilExporter, LoginError
 from fusil.reports import REPORTS
 from upload.s3 import send_sns_alert, upload_with_retry, write_manifest
 from utils import setup_logging, within_schedule_window
@@ -46,6 +46,9 @@ def main():
         exporter.connect()
         for report in REPORTS:
             exporter.export_report(report)
+    except LoginError as exc:
+        log.error("Aborting: %s", exc)
+        return  # finally block handles close(); wrong credentials are not an alertable infra failure
     except Exception as exc:
         log.error("Unhandled error during FUSIL automation: %s", exc, exc_info=True)
         exporter.failed_reports.append("__automation__")

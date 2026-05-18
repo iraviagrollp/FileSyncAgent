@@ -234,5 +234,6 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 | Config loading | Typed `Config` dataclass + `Config.load()` | Single place to see all settings; IDE autocomplete; no stringly-typed key access |
 | Modular structure | `fusil/`, `upload/`, `config.py`, `utils.py` | Separates UI automation from S3 logic; per-report config data in `reports.py` |
 | Window detection | `Desktop(backend="uia")` matching title `"Fusil"` | Actual OS window title is `"Fusil"` — `"IRAVIAGROLIFELLP"` is a label inside the window, not the OS title. Confirmed via diagnostic script. |
-| Login detection | Count Edit fields: ≥2 = login screen, 1 = main screen | LOGIN button lookup unreliable for 32-bit app under 64-bit UIA; Edit field count is robust and already works via descendants() |
+| Login detection | Count Edit fields: ≥2 = login screen, 1 = main screen | LOGIN button lookup unreliable for 32-bit app under 64-bit UIA; Edit field count is robust via descendants() |
+| Login failure | Raises `LoginError` → clean exit via finally, no SNS | Wrong credentials are a config problem, not an infra failure; no alert needed |
 | Stale file prevention | Filter exported files by `st_mtime >= export_started` | Prevents returning a file from a prior run if the current export silently fails |

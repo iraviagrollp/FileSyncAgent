@@ -167,6 +167,9 @@ s3://{bucket}/
 **Login screen not detected / agent times out on connect**
 → Agent polls for a window titled `"Fusil"` every second for 60s. If it still misses the login screen, run `python scripts\diagnose_fusil.py` with FUSIL open and paste the output.
 
+**Login failed — script exits with "Aborting: Login failed"**
+→ Wrong credentials. Check `fusil_password` in `config.json`.
+
 **Menu navigation fails**
 → Check logs for `menu_select failed` — the agent falls back to manual clicks automatically. If both fail, the report is logged as failed and an SNS alert is sent.
 

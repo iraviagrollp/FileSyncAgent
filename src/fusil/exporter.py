@@ -10,6 +10,10 @@ from pywinauto.keyboard import send_keys
 from config import Config
 from .reports import FILENAME_PREFIX
 
+
+class LoginError(Exception):
+    """Raised when FUSIL login credentials are rejected or the login screen does not clear."""
+
 # Actual OS window title for FUSIL (both login screen and main window use this title).
 # "IRAVIAGROLIFELLP" is a label rendered *inside* the window, not the OS window title.
 _FUSIL_TITLE = "Fusil"
@@ -53,8 +57,9 @@ class FusilExporter:
     def _handle_login_if_needed(self):
         """
         Poll for the FUSIL window (title='Fusil') for up to _READY_TIMEOUT seconds.
-        If the window has a LOGIN button it's the login screen — enter credentials.
-        If it has no LOGIN button it's already on the main screen — proceed directly.
+        Detects the login screen by counting Edit fields: >=2 means the login form
+        is showing (username + password); 1 means the main screen (search box only).
+        Raises LoginError if credentials are submitted but the screen does not clear.
         """
         self.log.info("Waiting for FUSIL window (up to %ds)", _READY_TIMEOUT)
         deadline = time.time() + _READY_TIMEOUT
@@ -86,6 +91,18 @@ class FusilExporter:
                 if edit_count >= 2:
                     self.log.info("Login screen detected — entering credentials")
                     self._do_login(win)
+                    # Verify the screen transitioned away from the login form
+                    time.sleep(2)
+                    try:
+                        post_edit_count = len(win.descendants(control_type="Edit"))
+                    except Exception:
+                        post_edit_count = 2  # unknown state — assume still on login to surface failure
+                    if post_edit_count >= 2:
+                        raise LoginError(
+                            "Login failed — screen still showing login form after submitting credentials. "
+                            "Check fusil_password in config.json."
+                        )
+                    self.log.info("Login successful — main screen ready")
                 else:
                     self.log.info("No login screen — already authenticated")
                 return
