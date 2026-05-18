@@ -259,20 +259,30 @@ class FusilExporter:
 
     def _open_hamburger_menu(self):
         """
-        Open the navigation panel by clicking the ≡ hamburger button.
+        Open the navigation panel by invoking the ≡ hamburger MenuItem via UIA.
 
-        UIA cannot find the hamburger before the panel is opened (it's a virtual
-        element not in the tree until after first interaction). PostMessage is used
-        instead of click_input — it sends WM_LBUTTONDOWN/UP directly to the window
-        handle without calling SetCursorPos, so it works when RDP is minimized or
-        the display is inactive.
+        The hamburger is a MenuItem with auto_id='MainMenu' inside the Menu
+        auto_id='MainMenu1' — confirmed by diagnostic. UIA invoke() is purely
+        accessibility-layer and works without a display (headless / minimized RDP).
+        Falls back to PostMessage if the UIA element is not found.
         """
+        hamburger = self._find_by_descendants(self.main_win, auto_id="MainMenu")
+        if hamburger is not None:
+            try:
+                hamburger.invoke()
+                self.log.info("Hamburger menu opened (UIA invoke)")
+                time.sleep(_MENU_WAIT * 2)
+                return
+            except Exception as exc:
+                self.log.warning("Hamburger invoke failed: %s — trying PostMessage", exc)
+
+        # Fallback: PostMessage direct to HWND (requires display but avoids SetCursorPos)
         try:
             self._post_click(self.main_win.handle, 17, 14)
-            self.log.info("Hamburger menu opened (PostMessage at 17,14)")
-            time.sleep(_MENU_WAIT * 2)  # panel animation needs a moment
+            self.log.info("Hamburger menu opened (PostMessage fallback at 17,14)")
+            time.sleep(_MENU_WAIT * 2)
         except Exception as exc:
-            self.log.warning("Hamburger PostMessage click failed: %s", exc)
+            self.log.warning("Hamburger PostMessage fallback failed: %s", exc)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
