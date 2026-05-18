@@ -209,14 +209,21 @@ class FusilExporter:
         return None
 
     def _open_hamburger_menu(self):
-        """Click the ≡ hamburger (auto_id='MainMenu') using descendants() iteration."""
-        ctrl = self._find_by_descendants(self.main_win, auto_id="MainMenu")
-        if ctrl:
-            ctrl.click_input()
-            self.log.info("Hamburger menu opened")
-            time.sleep(_MENU_WAIT)
-        else:
-            self.log.warning("Hamburger not found via descendants — proceeding anyway")
+        """
+        Open the navigation panel by clicking the ≡ hamburger button.
+
+        UIA cannot find the hamburger before the panel is opened (it's a virtual
+        element not in the tree until after first interaction). Coordinate click
+        is used instead — (17, 14) is the hamburger's position relative to the
+        window's client area top-left, confirmed from screenshots.
+        After the click the panel loads and descendants() finds the menu items.
+        """
+        try:
+            self.main_win.click_input(coords=(17, 14))
+            self.log.info("Hamburger menu opened (coordinate click at 17,14)")
+            time.sleep(_MENU_WAIT * 2)  # panel animation needs a moment
+        except Exception as exc:
+            self.log.warning("Hamburger coordinate click failed: %s", exc)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
