@@ -205,15 +205,15 @@ When no data exists, FUSIL also shows a "Data not found for given options." dial
 - [x] Python confirmed on FUSIL server — in system PATH, no explicit path needed
 - [x] `flows/setup-and-run.html` — setup and run guide
 - [x] `flows/architecture.html` — system architecture diagram
-- [ ] `scripts/install.ps1` — Task Scheduler setup
+- [x] `scripts/install.ps1` — Task Scheduler setup (daily at 22:00, `--force` flag)
 - [ ] `tests/test_file_sync_agent.py`
 
 ## What Is Next
 
-- [ ] Fix menu navigation — control type for FUSIL menu items unknown (running diagnostic)
 - [x] Complete first successful end-to-end export run on FUSIL PRO server (sale report confirmed working 2026-05-18)
+- [x] `scripts/install.ps1` — Task Scheduler: daily at 22:00 IST, `--force` flag
+- [x] RDP headless fix — replaced `click_input()` with `PostMessage`/`invoke()`/`set_edit_text()` so the script runs without an active display
 - [ ] Enable S3 upload once AWS account is provisioned (`s3_upload_enabled: true`)
-- [ ] Write `scripts/install.ps1`
 - [ ] Write unit tests
 - [ ] Full end-to-end test with all 7 reports on a date with data
 
@@ -241,8 +241,9 @@ When no data exists, FUSIL also shows a "Data not found for given options." dial
 | Menu navigation | Hamburger via `MainMenu1`→`MainMenu` (two-step), top-level items by `auto_id`, sub-items by title in popup | Hamburger is `MenuItem auto_id='MainMenu'` inside `Menu auto_id='MainMenu1'`. Top-level items have `auto_id == title`. Confirmed via diagnostic. |
 | Navigation readiness | Poll for `MainMenu1` in `connect()` before proceeding | `main_win.wait("ready")` returns when window exists but FUSIL's nav controls load asynchronously after login — agent must wait for `MainMenu1` to appear in UIA tree |
 | Menu item search | `descendants()` iteration instead of `child_window()` | `child_window()` criteria fail for virtual UIA elements (handle=None) in 32-bit .NET apps under 64-bit Python. `descendants()` works reliably — confirmed by diagnostic script. |
-| Hamburger click | Coordinate click at `(17, 14)` window-relative | UIA can't find the hamburger before panel is opened (circular dependency). Coordinate click is stable across window positions. Menu items appear in UIA tree only after panel opens. |
+| Hamburger click | `PostMessage(WM_LBUTTONDOWN/UP)` at `(17, 14)` window-relative | `click_input()` calls `SetCursorPos` which fails when RDP is minimized/disconnected (error 2). `PostMessage` sends directly to the HWND — no cursor movement, works headless. |
 | Login detection | Count Edit fields: >1 = login screen | Login screen has 4 Edit fields; main screen also has 4+. No post-login verification — count-based check caused false LoginErrors. Wrong credentials surface as menu navigation failures. |
 | Login field detection | Find username/password by current value (non-empty vs empty) | 4 edit fields exist — positional indexing unreliable; value-based detection identifies correct fields. `triple_click_input` not available on UIA EditWrapper — use `type_keys("^a") + type_keys(value)`. |
 | Login security | Exception logged at DEBUG only (not WARNING) | pywinauto exceptions can echo typed keys — password must not appear in log files |
 | Stale file prevention | Filter exported files by `st_mtime >= export_started` | Prevents returning a file from a prior run if the current export silently fails |
+| Headless click strategy | `invoke()` (UIA InvokePattern) for all button/menu clicks; `set_edit_text()` for date fields | `click_input()` calls `SetCursorPos` which fails without an active display. UIA Invoke/ValuePattern are purely message-based — no cursor, works when RDP is disconnected. |

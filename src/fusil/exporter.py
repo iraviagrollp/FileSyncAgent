@@ -5,6 +5,8 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+import win32con
+import win32gui
 from pywinauto import Application, Desktop
 from pywinauto.keyboard import send_keys
 
@@ -151,22 +153,29 @@ class FusilExporter:
                 if len(edits) >= 2:
                     username_field = edits[0]
 
-            # Fill username — type_keys("^a") targets the control directly,
-            # avoiding send_keys which fires on the active window (may differ)
+            # Fill username via UIA ValuePattern (no cursor), fallback to type_keys
             if username_field:
-                username_field.click_input()
-                username_field.type_keys("^a")
-                username_field.type_keys(self.config.fusil_username, with_spaces=True)
+                try:
+                    username_field.set_edit_text(self.config.fusil_username)
+                except Exception:
+                    username_field.click_input()
+                    username_field.type_keys("^a")
+                    username_field.type_keys(self.config.fusil_username, with_spaces=True)
                 time.sleep(0.2)
 
             # Fill password
-            password_field.click_input()
-            password_field.type_keys(self.config.fusil_password, with_spaces=True)
+            try:
+                password_field.set_edit_text(self.config.fusil_password)
+            except Exception:
+                password_field.click_input()
+                password_field.type_keys(self.config.fusil_password, with_spaces=True)
             time.sleep(0.4)
 
-            # Click LOGIN — fall back to Enter if button not found via UIA
+            # Click LOGIN — invoke (no cursor), fall back to Enter
             try:
-                login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
+                self._invoke_or_click(
+                    login_win.child_window(title=_LOGIN_BUTTON, control_type="Button")
+                )
             except Exception:
                 self.log.debug("LOGIN button not found via UIA — pressing Enter")
                 send_keys("{ENTER}")
@@ -233,22 +242,37 @@ class FusilExporter:
                 continue
         return None
 
+    def _post_click(self, hwnd: int, x: int, y: int):
+        """Send a left-click via PostMessage — does NOT call SetCursorPos so it
+        works when the RDP session is minimized or the display is inactive."""
+        lparam = x | (y << 16)
+        win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+        time.sleep(0.05)
+        win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, lparam)
+
+    def _invoke_or_click(self, ctrl):
+        """UIA Invoke (no cursor required) with click_input fallback."""
+        try:
+            ctrl.invoke()
+        except Exception:
+            ctrl.click_input()
+
     def _open_hamburger_menu(self):
         """
         Open the navigation panel by clicking the ≡ hamburger button.
 
         UIA cannot find the hamburger before the panel is opened (it's a virtual
-        element not in the tree until after first interaction). Coordinate click
-        is used instead — (17, 14) is the hamburger's position relative to the
-        window's client area top-left, confirmed from screenshots.
-        After the click the panel loads and descendants() finds the menu items.
+        element not in the tree until after first interaction). PostMessage is used
+        instead of click_input — it sends WM_LBUTTONDOWN/UP directly to the window
+        handle without calling SetCursorPos, so it works when RDP is minimized or
+        the display is inactive.
         """
         try:
-            self.main_win.click_input(coords=(17, 14))
-            self.log.info("Hamburger menu opened (coordinate click at 17,14)")
+            self._post_click(self.main_win.handle, 17, 14)
+            self.log.info("Hamburger menu opened (PostMessage at 17,14)")
             time.sleep(_MENU_WAIT * 2)  # panel animation needs a moment
         except Exception as exc:
-            self.log.warning("Hamburger coordinate click failed: %s", exc)
+            self.log.warning("Hamburger PostMessage click failed: %s", exc)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
@@ -263,7 +287,7 @@ class FusilExporter:
             ctrl = self._find_by_descendants(current, title=label)
             if ctrl is None:
                 raise RuntimeError(f"Menu item not found: '{label}'")
-            ctrl.click_input()
+            self._invoke_or_click(ctrl)
             time.sleep(_ACTION_WAIT)  # wait for sub-items to load into UIA tree
 
             # After each click, check if a submenu popup appeared
@@ -296,11 +320,15 @@ class FusilExporter:
         return fields
 
     def _fill_date_field(self, field):
-        """Click a date field, select-all, and type the export date."""
-        field.click_input()
-        field.type_keys("^a")
-        time.sleep(0.2)
-        field.type_keys(self.date_str, with_spaces=False)
+        """Set a date field via UIA ValuePattern (no cursor needed), TAB to confirm."""
+        try:
+            field.set_edit_text(self.date_str)
+        except Exception:
+            # Fallback: cursor-based input (requires active display)
+            field.click_input()
+            field.type_keys("^a")
+            time.sleep(0.2)
+            field.type_keys(self.date_str, with_spaces=False)
         time.sleep(0.2)
         send_keys("{TAB}")
         time.sleep(0.3)
@@ -357,7 +385,9 @@ class FusilExporter:
             return
 
         try:
-            self.main_win.child_window(title_re="View.*", control_type="Button").click_input()
+            self._invoke_or_click(
+                self.main_win.child_window(title_re="View.*", control_type="Button")
+            )
         except Exception:
             send_keys("{F1}")
         time.sleep(_VIEW_WAIT)
@@ -366,7 +396,7 @@ class FusilExporter:
         try:
             ok = self._find_by_descendants(self.main_win, title="OK")
             if ok:
-                ok.click_input()
+                self._invoke_or_click(ok)
                 self.log.info("Dismissed 'no data' dialog")
         except Exception:
             pass
@@ -402,7 +432,7 @@ class FusilExporter:
         try:
             no_btn = self._find_by_descendants(self.main_win, title="No")
             if no_btn:
-                no_btn.click_input()
+                self._invoke_or_click(no_btn)
                 self.log.info("Export dialog dismissed")
         except Exception as exc:
             self.log.warning("Could not dismiss export dialog: %s", exc)
