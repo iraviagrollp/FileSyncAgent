@@ -232,6 +232,6 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 | Error vs no-data | Separate `failed_reports` / `no_data_reports` lists | Only real errors trigger SNS; no-data is an expected business scenario |
 | Config loading | Typed `Config` dataclass + `Config.load()` | Single place to see all settings; IDE autocomplete; no stringly-typed key access |
 | Modular structure | `fusil/`, `upload/`, `config.py`, `utils.py` | Separates UI automation from S3 logic; per-report config data in `reports.py` |
-| Window detection | `Desktop(backend="uia")` scans all windows | Handles child-process spawning; PID filter removed — it excluded child-process windows, defeating the purpose |
+| Window detection | `Desktop(backend="uia")` matching title `"Fusil"` | Actual OS window title is `"Fusil"` — `"IRAVIAGROLIFELLP"` is a label inside the window, not the OS title. Confirmed via diagnostic script. |
 | Login detection | Poll up to 30s for main window or LOGIN button | Fixed-sleep approach failed on slow server; active polling handles any startup time |
 | Stale file prevention | Filter exported files by `st_mtime >= export_started` | Prevents returning a file from a prior run if the current export silently fails |

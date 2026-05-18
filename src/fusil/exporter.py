@@ -10,8 +10,9 @@ from pywinauto.keyboard import send_keys
 from config import Config
 from .reports import FILENAME_PREFIX
 
-# Window identifiers
-_MAIN_TITLE = "IRAVIAGROLIFELLP"
+# Actual OS window title for FUSIL (both login screen and main window use this title).
+# "IRAVIAGROLIFELLP" is a label rendered *inside* the window, not the OS window title.
+_FUSIL_TITLE = "Fusil"
 _LOGIN_BUTTON = "LOGIN"
 
 # Timing constants (seconds) — increase on a slow machine
@@ -51,47 +52,40 @@ class FusilExporter:
 
     def _handle_login_if_needed(self):
         """
-        Poll until either the main window or the login screen is accessible (up to
-        _READY_TIMEOUT seconds). Handles machines where FUSIL takes a while to render.
+        Poll for the FUSIL window (title='Fusil') for up to _READY_TIMEOUT seconds.
+        If the window has a LOGIN button it's the login screen — enter credentials.
+        If it has no LOGIN button it's already on the main screen — proceed directly.
         """
-        self.log.info("Waiting for FUSIL to become ready (up to %ds)", _READY_TIMEOUT)
+        self.log.info("Waiting for FUSIL window (up to %ds)", _READY_TIMEOUT)
         deadline = time.time() + _READY_TIMEOUT
-        login_win = None
         desktop = Desktop(backend="uia")
 
         while time.time() < deadline:
-            # Search all desktop windows — handles child-process spawning.
-            # _MAIN_TITLE and _LOGIN_BUTTON are specific enough to avoid false matches.
             for win in desktop.windows():
                 try:
-                    title = win.window_text()
-                    if _MAIN_TITLE in title:
-                        self.log.info("No login screen — already authenticated")
-                        return
+                    if win.window_text() != _FUSIL_TITLE:
+                        continue
+                    # Found the FUSIL window
                     if win.child_window(title=_LOGIN_BUTTON, control_type="Button").exists(timeout=0):
-                        login_win = win
-                        break
+                        self.log.info("Login screen detected — entering credentials")
+                        self._do_login(win)
+                    else:
+                        self.log.info("FUSIL ready — already authenticated")
+                    return
                 except Exception as exc:
-                    self.log.debug("Skipping window during scan: %s", exc)
+                    self.log.debug("Window scan error: %s", exc)
                     continue
-
-            if login_win:
-                break
             time.sleep(1)
 
-        if login_win is None:
-            self.log.warning(
-                "Neither main window nor login screen appeared within %ds — proceeding",
-                _READY_TIMEOUT,
-            )
-            return
+        self.log.warning("FUSIL window not found within %ds — proceeding anyway", _READY_TIMEOUT)
 
-        self.log.info("Login screen detected — entering credentials")
+    def _do_login(self, login_win):
+        """Type credentials into the login form and click LOGIN."""
         try:
-            # Use descendants() — Edit controls are inside a nested panel, not direct children
+            # Use descendants() — Edit controls are inside a nested panel
             edits = login_win.descendants(control_type="Edit")
             if len(edits) >= 2:
-                # index 0 = username, index 1 = password (top-to-bottom in the form)
+                # index 0 = username, index 1 = password (top-to-bottom order)
                 edits[0].triple_click_input()
                 edits[0].type_keys(self.config.fusil_username, with_spaces=True)
                 time.sleep(0.2)
@@ -101,19 +95,19 @@ class FusilExporter:
                 edits[0].set_focus()
                 edits[0].type_keys(self.config.fusil_password, with_spaces=True)
             else:
-                self.log.warning("No Edit controls found on login screen — skipping credential entry")
+                self.log.warning("No Edit controls found on login screen")
                 return
             time.sleep(0.4)
             login_win.child_window(title=_LOGIN_BUTTON, control_type="Button").click_input()
             self.log.info("Login submitted — waiting for main window")
             time.sleep(4)
         except Exception as exc:
-            self.log.warning("Login credential entry failed: %s", exc)
+            self.log.warning("Login failed: %s", exc)
 
     def connect(self):
         self._handle_login_if_needed()
-        self.log.info("Connecting to main window (%s)", _MAIN_TITLE)
-        self.main_win = Desktop(backend="uia").window(title_re=f".*{_MAIN_TITLE}.*")
+        self.log.info("Connecting to FUSIL main window")
+        self.main_win = Desktop(backend="uia").window(title=_FUSIL_TITLE)
         self.main_win.wait("ready", timeout=30)
         self.main_win.set_focus()
         self.log.info("Main window ready")
@@ -292,9 +286,9 @@ class FusilExporter:
 
     def close(self):
         try:
-            if self.main_win:
-                self.main_win.close()
-                time.sleep(2)
+            win = self.main_win or Desktop(backend="uia").window(title=_FUSIL_TITLE)
+            win.close()
+            time.sleep(2)
             self.log.info("FUSIL closed")
         except Exception as exc:
             self.log.warning("Could not close FUSIL cleanly: %s", exc)

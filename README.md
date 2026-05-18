@@ -165,7 +165,7 @@ s3://{bucket}/
 ## Troubleshooting
 
 **Login screen not detected / agent times out on connect**
-→ Agent uses Desktop-level window search (handles child-process spawning). If it still fails after 30s, run the diagnostic: `python scripts\diagnose_fusil.py` with FUSIL open and paste the output.
+→ Agent looks for a window titled `"Fusil"` (the actual OS title). If it fails, run `python scripts\diagnose_fusil.py` with FUSIL open to confirm the window title on this machine.
 
 **Menu navigation fails**
 → Check logs for `menu_select failed` — the agent falls back to manual clicks automatically. If both fail, the report is logged as failed and an SNS alert is sent.
