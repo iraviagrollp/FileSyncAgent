@@ -363,16 +363,15 @@ class FusilExporter:
         self.main_win.set_focus()
         send_keys(export_key)
 
-        # Ctrl+O opens a Save As dialog — accept with Enter
+        # Ctrl+O opens a Save As dialog — wait for it then press Enter.
+        # The dialog is modal and focused with the filename pre-filled,
+        # so Enter activates the Save button without needing UIA lookup.
         if export_key == "^o":
-            try:
-                save_dialog = Desktop(backend="uia").window(title="Save As")
-                if save_dialog.exists(timeout=5):
-                    self.log.info("Save As dialog found — pressing Enter to accept")
-                    send_keys("{ENTER}")
-                    time.sleep(2)
-            except Exception as exc:
-                self.log.warning("Could not handle Save As dialog: %s", exc)
+            self.log.info("Waiting for Save As dialog")
+            time.sleep(3)
+            send_keys("{ENTER}")
+            self.log.info("Save As accepted")
+            time.sleep(2)
 
         self.log.info("Waiting up to %ds for export to complete", _EXPORT_WAIT)
         time.sleep(_EXPORT_WAIT)
