@@ -305,12 +305,26 @@ class FusilExporter:
         return -1
 
     def _click_view(self):
-        """Click the View (F1) button, or press F1 as fallback."""
+        """Click the View (F1) button, or press F1 as fallback.
+        Also dismisses the 'Data not found for given options.' dialog that
+        FUSIL shows when a date range has no records."""
         try:
             self.main_win.child_window(title_re="View.*", control_type="Button").click_input()
         except Exception:
             send_keys("{F1}")
         time.sleep(_VIEW_WAIT)
+
+        # Dismiss "Data not found for given options." dialog if it appeared
+        try:
+            dialog = Desktop(backend="uia").window(title="Message")
+            if dialog.exists(timeout=2):
+                ok = self._find_by_descendants(dialog, title="OK")
+                if ok:
+                    ok.click_input()
+                    self.log.info("Dismissed 'no data' dialog")
+        except Exception:
+            pass
+
         self.log.info("View loaded")
 
     def _trigger_export(self):

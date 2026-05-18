@@ -127,6 +127,7 @@ The agent reads the `Count=N` indicator after View (F1):
 - `Count` unreadable → log a warning and attempt export anyway
 
 No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors trigger SNS alerts.
+When no data exists, FUSIL also shows a "Data not found for given options." dialog with OK — the agent dismisses this before reading Count=0.
 
 ### Retry + alerting
 - On S3 upload failure: retry up to 3 times with exponential backoff (5s, 25s, 125s)
