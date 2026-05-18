@@ -71,18 +71,19 @@ class FusilExporter:
                     self.log.debug("Could not read window title: %s", exc)
                     continue
 
-                # Step 2: FUSIL window found — login check in a separate try
-                # so an exception here does NOT skip the window
+                # Step 2: FUSIL window found — detect login screen by counting
+                # Edit fields. Login screen has 2 (username + password).
+                # Main screen has 1 (search box). More reliable than button
+                # lookup on a 32-bit app under 64-bit UIA.
                 self.log.info("FUSIL window found (pid=%s)", win.process_id())
-                has_login = False
+                edit_count = 0
                 try:
-                    has_login = win.child_window(
-                        title=_LOGIN_BUTTON, control_type="Button"
-                    ).exists(timeout=1)
+                    edit_count = len(win.descendants(control_type="Edit"))
                 except Exception as exc:
-                    self.log.debug("LOGIN button check failed: %s", exc)
+                    self.log.debug("Edit field count failed: %s", exc)
 
-                if has_login:
+                self.log.info("Edit fields visible: %d", edit_count)
+                if edit_count >= 2:
                     self.log.info("Login screen detected — entering credentials")
                     self._do_login(win)
                 else:
