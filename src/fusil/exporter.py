@@ -334,11 +334,15 @@ class FusilExporter:
         send_keys("^x")
         self.log.info("Waiting up to %ds for export to complete", _EXPORT_WAIT)
         time.sleep(_EXPORT_WAIT)
+        # Dismiss "Export file generated successfully. Do you want open the file?"
+        # dialog is a child of main_win — use descendants() like all other dialogs.
         try:
-            dialog = Desktop(backend="uia").window(title="Message")
-            dialog.wait("ready", timeout=10)
-            dialog.child_window(title="No", control_type="Button").click_input()
-            self.log.info("Export dialog dismissed")
+            no_btn = self._find_by_descendants(self.main_win, title="No")
+            if no_btn:
+                no_btn.click_input()
+                self.log.info("Export dialog dismissed")
+            else:
+                self.log.warning("Export dialog 'No' button not found")
         except Exception as exc:
             self.log.warning("Could not dismiss export dialog: %s", exc)
         time.sleep(1)
