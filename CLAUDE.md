@@ -210,7 +210,7 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
 ## What Is Next
 
 - [ ] Fix menu navigation — control type for FUSIL menu items unknown (running diagnostic)
-- [ ] Complete first successful end-to-end export run on FUSIL PRO server
+- [ ] Complete first successful end-to-end export run on FUSIL PRO server (navigation working, date-setting fix in progress)
 - [ ] Verify Purchase Return Book menu path against live FUSIL app
 - [ ] Enable S3 upload once AWS account is provisioned (`s3_upload_enabled: true`)
 - [ ] Write `scripts/install.ps1`

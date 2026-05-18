@@ -160,7 +160,7 @@ class FusilExporter:
     def connect(self):
         self._handle_login_if_needed()
         self.log.info("Connecting to FUSIL main window")
-        self.main_win = Desktop(backend="uia").window(title=_FUSIL_TITLE)
+        self.main_win = Desktop(backend="uia").window(title=_FUSIL_TITLE, found_index=0)
         self.main_win.wait("ready", timeout=30)
         self.main_win.set_focus()
 
@@ -239,7 +239,7 @@ class FusilExporter:
             if ctrl is None:
                 raise RuntimeError(f"Menu item not found: '{label}'")
             ctrl.click_input()
-            time.sleep(_MENU_WAIT)
+            time.sleep(_ACTION_WAIT)  # wait for sub-items to load into UIA tree
 
             # After each click, check if a submenu popup appeared
             try:
@@ -275,7 +275,8 @@ class FusilExporter:
             return
 
         for field in date_fields[:2]:
-            field.triple_click_input()
+            field.click_input()
+            field.type_keys("^a")    # select-all — triple_click_input not on UIA EditWrapper
             time.sleep(0.2)
             field.type_keys(self.date_str, with_spaces=False)
             time.sleep(0.2)
