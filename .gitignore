@@ -1,0 +1,30 @@
+# Real config — contains S3 bucket, SNS ARN, folder paths
+config/config.json
+
+# UI flow screenshots / design docs (local reference only)
+flows/
+
+# Runtime logs
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

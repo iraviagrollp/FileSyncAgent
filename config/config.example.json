@@ -1,0 +1,15 @@
+{
+  "fusil_exe_path": "C:\\FUSIL INFINITY\\FUSILINFINITY.exe",
+  "fusil_username": "Administrator",
+  "fusil_password": "<fusil-password>",
+  "export_folder": "C:\\FUSIL INFINITY\\ExportFiles",
+  "s3_upload_enabled": false,
+  "s3_bucket": "iravi-dashboard-<your-account-id>",
+  "aws_region": "ap-south-1",
+  "sns_alert_arn": "arn:aws:sns:ap-south-1:<your-account-id>:iravi-dashboard-alerts",
+  "schedule_window_start_ist": "19:00",
+  "schedule_window_end_ist": "21:30",
+  "max_retries": 3,
+  "retry_backoff_seconds": 5,
+  "log_file": "D:\\Projects\\Iravi\\FileSyncAgent\\logs\\file_sync_agent.log"
+}
