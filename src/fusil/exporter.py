@@ -90,15 +90,18 @@ class FusilExporter:
                 if edit_count > 1:
                     self.log.info("Login screen detected — entering credentials")
                     self._do_login(win)
-                    # Verify the screen transitioned away from the login form
-                    time.sleep(2)
+                    # Verify the screen transitioned: edit count must DECREASE after login.
+                    # The main screen has fewer Edit fields than the login form.
+                    # Comparing against pre-login count handles any main-screen field count.
+                    time.sleep(3)
                     try:
                         post_edit_count = len(win.descendants(control_type="Edit"))
                     except Exception:
-                        post_edit_count = 2  # unknown state — assume still on login to surface failure
-                    if post_edit_count > 1:
+                        post_edit_count = edit_count  # unknown — assume unchanged (fail safe)
+                    self.log.info("Post-login edit fields: %d (was %d)", post_edit_count, edit_count)
+                    if post_edit_count >= edit_count:
                         raise LoginError(
-                            "Login failed — screen still showing login form after submitting credentials. "
+                            "Login failed — edit field count did not decrease after submitting credentials. "
                             "Check fusil_password in config.json."
                         )
                     self.log.info("Login successful — main screen ready")
