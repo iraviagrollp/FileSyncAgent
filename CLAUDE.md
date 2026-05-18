@@ -200,7 +200,8 @@ No-data skips are expected (e.g. no sales on a Sunday). Only unexpected errors t
   - [x] Stale file prevention — `_find_exported_file` filters by `st_mtime >= export_started`
   - [x] Login detection fixed — checks for main window absence; uses `descendants()` for nested form fields
   - [x] S3 upload catches `BotoCoreError` and `OSError` in addition to `ClientError`
-- [x] Deployed to FUSIL PRO server (`D:\Iravi InHouse\Software\FileSyncAgent`) — first test run attempted
+- [x] Deployed to FUSIL PRO server (`D:\Iravi InHouse\Software\FileSyncAgent`)
+- [x] Python confirmed on FUSIL server — in system PATH, no explicit path needed
 - [x] `flows/setup-and-run.html` — setup and run guide
 - [x] `flows/architecture.html` — system architecture diagram
 - [ ] `scripts/install.ps1` — Task Scheduler setup
