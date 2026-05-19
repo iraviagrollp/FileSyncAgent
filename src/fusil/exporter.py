@@ -295,11 +295,26 @@ class FusilExporter:
 
         # --- Win32 primary path ---
         search_hwnd = self._find_edit_near_top(main_hwnd)
+
+        # If Win32 enumeration missed it, get the HWND from UIA instead
+        if not search_hwnd:
+            try:
+                ctrl = self._find_by_descendants(self.main_win, auto_id="txtSearchMenu")
+                if ctrl:
+                    search_hwnd = ctrl.handle
+                    self.log.debug("Search HWND %d obtained from UIA fallback", search_hwnd)
+            except Exception:
+                pass
+
         if search_hwnd:
             try:
                 win32api.SendMessage(search_hwnd, _WM_SETTEXT, 0, screen_name)
-                self.log.info("Search (Win32): set text '%s' on HWND %d", screen_name, search_hwnd)
-                time.sleep(1.5)
+                # Press Enter to trigger the "Search Menu" popup
+                win32gui.PostMessage(search_hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
+                time.sleep(0.1)
+                win32gui.PostMessage(search_hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
+                self.log.info("Search (Win32): set text + Enter for '%s' on HWND %d", screen_name, search_hwnd)
+                time.sleep(2)
 
                 popup_hwnd = None
                 deadline = time.time() + 5
@@ -354,8 +369,17 @@ class FusilExporter:
             return False
         try:
             search.set_edit_text(screen_name)
-            self.log.info("Search (UIA): typed '%s' — waiting for popup", screen_name)
-            time.sleep(1.5)
+            # Press Enter via PostMessage to the HWND — works even when display is inactive
+            try:
+                hwnd = search.handle
+                if hwnd:
+                    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
+                    time.sleep(0.1)
+                    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
+            except Exception:
+                pass
+            self.log.info("Search (UIA): typed '%s' + Enter — waiting for popup", screen_name)
+            time.sleep(2)
 
             desktop = Desktop(backend="uia")
             popup = None
