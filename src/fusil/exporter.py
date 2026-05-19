@@ -241,7 +241,19 @@ class FusilExporter:
         """
         search = self._find_by_descendants(self.main_win, auto_id="txtSearchMenu")
         if search is None:
-            self.log.warning("Search box (txtSearchMenu) not found")
+            # Log available auto_ids to help diagnose the correct id
+            ids = []
+            try:
+                for ctrl in self.main_win.descendants():
+                    try:
+                        aid = ctrl.element_info.automation_id
+                        if aid:
+                            ids.append(aid)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            self.log.warning("Search box (txtSearchMenu) not found. Available auto_ids: %s", ids[:30])
             return False
         try:
             search.set_edit_text(screen_name)
@@ -297,11 +309,24 @@ class FusilExporter:
         """
         Find a control by iterating descendants — more reliable than child_window()
         for 32-bit .NET apps under 64-bit UIA where child_window() criteria fail.
+        Tries element_info.automation_id directly as well as the .automation_id() method
+        because the method can raise on some virtual UIA elements.
         """
         for ctrl in win.descendants():
             try:
-                if auto_id and ctrl.automation_id() == auto_id:
-                    return ctrl
+                if auto_id:
+                    aid = None
+                    try:
+                        aid = ctrl.automation_id()
+                    except Exception:
+                        pass
+                    if aid is None:
+                        try:
+                            aid = ctrl.element_info.automation_id
+                        except Exception:
+                            pass
+                    if aid == auto_id:
+                        return ctrl
                 if title and not auto_id and ctrl.window_text() == title:
                     return ctrl
             except Exception:
@@ -325,13 +350,31 @@ class FusilExporter:
 
     def _open_hamburger_menu(self):
         """
-        Open the navigation panel by invoking the ≡ hamburger MenuItem via UIA.
+        Open the navigation panel by clicking the ≡ hamburger button.
 
-        The hamburger is a MenuItem with auto_id='MainMenu' inside the Menu
-        auto_id='MainMenu1' — confirmed by diagnostic. UIA invoke() is purely
-        accessibility-layer and works without a display (headless / minimized RDP).
-        Falls back to PostMessage if the UIA element is not found.
+        Strategy (in order):
+        1. ChildWindowFromPoint — finds the actual child HWND at (17,14) and
+           PostMessages to it with correctly converted coords. Works headless.
+        2. UIA invoke on auto_id='MainMenu' — cursor-free but element may not
+           be in UIA tree in headless sessions.
+        3. click_input at (17,14) — works when RDP display is active; fails headless.
         """
+        hwnd = self.main_win.handle
+
+        # Strategy 1: PostMessage to correct child HWND via ChildWindowFromPoint
+        try:
+            child = win32gui.ChildWindowFromPoint(hwnd, (17, 14))
+            if child and child != hwnd:
+                screen_pt = win32gui.ClientToScreen(hwnd, (17, 14))
+                child_pt  = win32gui.ScreenToClient(child, screen_pt)
+                self._post_click(child, child_pt[0], child_pt[1])
+                self.log.info("Hamburger: PostMessage to child HWND at %s", child_pt)
+                time.sleep(_MENU_WAIT * 2)
+                return
+        except Exception as exc:
+            self.log.debug("ChildWindowFromPoint failed: %s", exc)
+
+        # Strategy 2: UIA invoke on hamburger element (auto_id='MainMenu')
         hamburger = self._find_by_descendants(self.main_win, auto_id="MainMenu")
         if hamburger is not None:
             try:
@@ -340,15 +383,15 @@ class FusilExporter:
                 time.sleep(_MENU_WAIT * 2)
                 return
             except Exception as exc:
-                self.log.warning("Hamburger invoke failed: %s — trying PostMessage", exc)
+                self.log.warning("Hamburger UIA invoke failed: %s", exc)
 
-        # Fallback: PostMessage direct to HWND (requires display but avoids SetCursorPos)
+        # Strategy 3: click_input (requires active display — works with RDP open)
         try:
-            self._post_click(self.main_win.handle, 17, 14)
-            self.log.info("Hamburger menu opened (PostMessage fallback at 17,14)")
+            self.main_win.click_input(coords=(17, 14))
+            self.log.info("Hamburger menu opened (click_input fallback)")
             time.sleep(_MENU_WAIT * 2)
         except Exception as exc:
-            self.log.warning("Hamburger PostMessage fallback failed: %s", exc)
+            self.log.warning("Hamburger click_input failed: %s", exc)
 
     def _navigate_menu_by_clicks(self, menu_path: list[str]):
         """
