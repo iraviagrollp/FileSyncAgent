@@ -217,15 +217,81 @@ class FusilExporter:
 
     def _navigate_menu(self, menu_path: list[str]):
         """
-        Open the hamburger (≡) button then click through the menu path.
+        Navigate to a report screen.
+        Primary:  search box (txtSearchMenu) — cursor-free, works headless.
+        Fallback: hamburger menu walk — requires display for UIA tree population.
         """
         self.log.info("Menu: %s", " -> ".join(menu_path))
         self.main_win.set_focus()
+
+        if self._navigate_via_search(menu_path[-1]):
+            return
+
+        self.log.info("Search navigation failed — falling back to hamburger menu")
         self._open_hamburger_menu()
         self._navigate_menu_by_clicks(menu_path)
-        # Wait for the report screen to fully render before _set_dates runs
         self.log.info("Waiting 5s for report screen to load")
         time.sleep(5)
+
+    def _navigate_via_search(self, screen_name: str) -> bool:
+        """
+        Navigate by typing in FUSIL's search box (auto_id='txtSearchMenu').
+        Flow: type name → "Search Menu" popup appears → invoke() the result link.
+        All cursor-free via UIA ValuePattern + InvokePattern — works headless.
+        """
+        search = self._find_by_descendants(self.main_win, auto_id="txtSearchMenu")
+        if search is None:
+            self.log.warning("Search box (txtSearchMenu) not found")
+            return False
+        try:
+            search.set_edit_text(screen_name)
+            self.log.info("Search: typed '%s' — waiting for popup", screen_name)
+            time.sleep(1.5)
+
+            # Wait for the "Search Menu" popup to appear
+            desktop = Desktop(backend="uia")
+            popup = None
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                try:
+                    w = desktop.window(title="Search Menu")
+                    if w.exists(timeout=0):
+                        popup = w
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.3)
+
+            if popup is None:
+                self.log.warning("Search Menu popup did not appear for '%s'", screen_name)
+                try:
+                    search.set_edit_text("")
+                except Exception:
+                    pass
+                return False
+
+            # Find the result link by title and invoke it (no cursor)
+            result = self._find_by_descendants(popup, title=screen_name)
+            if result is None:
+                self.log.warning("Result '%s' not found in Search Menu popup", screen_name)
+                try:
+                    popup.close()
+                except Exception:
+                    pass
+                return False
+
+            self._invoke_or_click(result)
+            self.log.info("Search: clicked '%s' — waiting 5s for screen to load", screen_name)
+            time.sleep(5)
+            return True
+
+        except Exception as exc:
+            self.log.warning("Search navigation failed for '%s': %s", screen_name, exc)
+            try:
+                search.set_edit_text("")
+            except Exception:
+                pass
+            return False
 
     def _find_by_descendants(self, win, auto_id: str = "", title: str = "") -> object:
         """

@@ -9,7 +9,7 @@ $Action = New-ScheduledTaskAction -Execute "python" -Argument "src\main.py --for
 
 # Daily at 22:00 (10:00 PM local time).
 # --force bypasses the schedule-window guard in main.py (window is 7-9:30 PM).
-$Trigger = New-ScheduledTaskTrigger -Daily -At "22:00"
+$Trigger = New-ScheduledTaskTrigger -Daily -At "22:20"
 
 $Settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew -StartWhenAvailable
 
