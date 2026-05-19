@@ -5,10 +5,13 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+import win32api
 import win32con
 import win32gui
 from pywinauto import Application, Desktop
 from pywinauto.keyboard import send_keys
+
+_WM_SETTEXT = 0x000C
 
 from config import Config
 from .reports import FILENAME_PREFIX
@@ -233,15 +236,109 @@ class FusilExporter:
         self.log.info("Waiting 5s for report screen to load")
         time.sleep(5)
 
+    def _find_edit_near_top(self, main_hwnd: int) -> Optional[int]:
+        """Find the search Edit HWND via Win32 enumeration — no UIA, works headless."""
+        main_rect = win32gui.GetWindowRect(main_hwnd)
+        candidates = []
+
+        def cb(hwnd, _):
+            try:
+                if "edit" in win32gui.GetClassName(hwnd).lower():
+                    r = win32gui.GetWindowRect(hwnd)
+                    rel_y = r[1] - main_rect[1]
+                    if 0 <= rel_y < 60:
+                        candidates.append((hwnd, r[0], rel_y))
+            except Exception:
+                pass
+            return True
+
+        try:
+            win32gui.EnumChildWindows(main_hwnd, cb, None)
+        except Exception:
+            pass
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: (x[2], x[1]))
+        return candidates[0][0]
+
+    def _find_child_by_text(self, parent_hwnd: int, text: str) -> Optional[int]:
+        """Find a child HWND whose window text matches — no UIA, works headless."""
+        found = []
+
+        def cb(hwnd, _):
+            try:
+                if win32gui.GetWindowText(hwnd) == text:
+                    found.append(hwnd)
+            except Exception:
+                pass
+            return True
+
+        try:
+            win32gui.EnumChildWindows(parent_hwnd, cb, None)
+        except Exception:
+            pass
+        return found[0] if found else None
+
     def _navigate_via_search(self, screen_name: str) -> bool:
         """
-        Navigate by typing in FUSIL's search box (auto_id='txtSearchMenu').
-        Flow: type name → "Search Menu" popup appears → invoke() the result link.
-        All cursor-free via UIA ValuePattern + InvokePattern — works headless.
+        Navigate to a screen using FUSIL's search box.
+
+        Primary path — Win32 only (fully headless, no UIA, no cursor):
+          1. Find search Edit HWND via EnumChildWindows
+          2. WM_SETTEXT → triggers FUSIL TextChanged → shows "Search Menu" popup
+          3. FindWindow("Search Menu") → find result HWND → PostMessage click
+
+        Fallback — UIA (requires active display session):
+          set_edit_text() + Desktop.window("Search Menu") + invoke()
         """
+        main_hwnd = self.main_win.handle
+
+        # --- Win32 primary path ---
+        search_hwnd = self._find_edit_near_top(main_hwnd)
+        if search_hwnd:
+            try:
+                win32api.SendMessage(search_hwnd, _WM_SETTEXT, 0, screen_name)
+                self.log.info("Search (Win32): set text '%s' on HWND %d", screen_name, search_hwnd)
+                time.sleep(1.5)
+
+                popup_hwnd = None
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    h = win32gui.FindWindow(None, "Search Menu")
+                    if h:
+                        popup_hwnd = h
+                        break
+                    time.sleep(0.3)
+
+                if popup_hwnd:
+                    result_hwnd = self._find_child_by_text(popup_hwnd, screen_name)
+                    if result_hwnd:
+                        rect = win32gui.GetClientRect(result_hwnd)
+                        cx = max(rect[2] // 2, 1)
+                        cy = max(rect[3] // 2, 1)
+                        self._post_click(result_hwnd, cx, cy)
+                        self.log.info("Search (Win32): clicked '%s' — waiting 5s", screen_name)
+                        time.sleep(5)
+                        return True
+                    self.log.warning("Search (Win32): result '%s' not in popup", screen_name)
+                    try:
+                        win32gui.PostMessage(popup_hwnd, win32con.WM_CLOSE, 0, 0)
+                    except Exception:
+                        pass
+                else:
+                    self.log.warning("Search (Win32): popup did not appear for '%s'", screen_name)
+                    try:
+                        win32api.SendMessage(search_hwnd, _WM_SETTEXT, 0, "")
+                    except Exception:
+                        pass
+            except Exception as exc:
+                self.log.warning("Search (Win32) failed: %s", exc)
+        else:
+            self.log.debug("Search Edit HWND not found via Win32 enumeration")
+
+        # --- UIA fallback ---
         search = self._find_by_descendants(self.main_win, auto_id="txtSearchMenu")
         if search is None:
-            # Log available auto_ids to help diagnose the correct id
             ids = []
             try:
                 for ctrl in self.main_win.descendants():
@@ -253,14 +350,13 @@ class FusilExporter:
                         pass
             except Exception:
                 pass
-            self.log.warning("Search box (txtSearchMenu) not found. Available auto_ids: %s", ids[:30])
+            self.log.warning("Search box not found (UIA fallback). Available auto_ids: %s", ids[:30])
             return False
         try:
             search.set_edit_text(screen_name)
-            self.log.info("Search: typed '%s' — waiting for popup", screen_name)
+            self.log.info("Search (UIA): typed '%s' — waiting for popup", screen_name)
             time.sleep(1.5)
 
-            # Wait for the "Search Menu" popup to appear
             desktop = Desktop(backend="uia")
             popup = None
             deadline = time.time() + 5
@@ -275,17 +371,16 @@ class FusilExporter:
                 time.sleep(0.3)
 
             if popup is None:
-                self.log.warning("Search Menu popup did not appear for '%s'", screen_name)
+                self.log.warning("Search (UIA): popup did not appear for '%s'", screen_name)
                 try:
                     search.set_edit_text("")
                 except Exception:
                     pass
                 return False
 
-            # Find the result link by title and invoke it (no cursor)
             result = self._find_by_descendants(popup, title=screen_name)
             if result is None:
-                self.log.warning("Result '%s' not found in Search Menu popup", screen_name)
+                self.log.warning("Search (UIA): result '%s' not found in popup", screen_name)
                 try:
                     popup.close()
                 except Exception:
@@ -293,12 +388,12 @@ class FusilExporter:
                 return False
 
             self._invoke_or_click(result)
-            self.log.info("Search: clicked '%s' — waiting 5s for screen to load", screen_name)
+            self.log.info("Search (UIA): clicked '%s' — waiting 5s", screen_name)
             time.sleep(5)
             return True
 
         except Exception as exc:
-            self.log.warning("Search navigation failed for '%s': %s", screen_name, exc)
+            self.log.warning("Search (UIA) failed for '%s': %s", screen_name, exc)
             try:
                 search.set_edit_text("")
             except Exception:
