@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+import ctypes
 import win32api
 import win32con
 import win32gui
@@ -12,6 +13,16 @@ from pywinauto import Application, Desktop
 from pywinauto.keyboard import send_keys
 
 _WM_SETTEXT = 0x000C
+
+# Tell Windows to keep the display active for this process — prevents the
+# session from throttling rendering when RDP is minimized or disconnected.
+# Same mechanism used by video players to prevent screen sleep.
+_ES_CONTINUOUS        = 0x80000000
+_ES_SYSTEM_REQUIRED   = 0x00000001
+_ES_DISPLAY_REQUIRED  = 0x00000002
+ctypes.windll.kernel32.SetThreadExecutionState(
+    _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
+)
 
 from config import Config
 from .reports import FILENAME_PREFIX
