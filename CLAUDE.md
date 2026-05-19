@@ -212,10 +212,20 @@ When no data exists, FUSIL also shows a "Data not found for given options." dial
 
 - [x] Complete first successful end-to-end export run on FUSIL PRO server (sale report confirmed working 2026-05-18)
 - [x] `scripts/install.ps1` — Task Scheduler: daily at 22:00 IST, `--force` flag
-- [x] RDP headless fix — replaced `click_input()` with `PostMessage`/`invoke()`/`set_edit_text()` so the script runs without an active display
 - [ ] Enable S3 upload once AWS account is provisioned (`s3_upload_enabled: true`)
-- [ ] Write unit tests
 - [ ] Full end-to-end test with all 7 reports on a date with data
+- [ ] Long-term: engage FUSIL team to deliver reports automatically to a shared folder — eliminates UI automation entirely
+
+## Known Constraint — RDP Must Be Open During Run
+
+The automation requires an active RDP session with the display visible. When RDP is minimized or disconnected, Windows throttles the session's display rendering which breaks both mouse input (`SetCursorPos`) and WPF-based UIA operations (FUSIL uses WPF controls for its search/navigation panel).
+
+**Current workaround:** Keep the RDP window open (not minimized) at 10:20 PM while the run executes (~5-7 minutes). Attempted fixes: `SetThreadExecutionState`, `PostMessage`, UIA `invoke()`, Win32 `WM_SETTEXT` — none bypass the display throttling.
+
+**Permanent fix options (not yet implemented):**
+- VNC server (captures physical display, persists after viewer disconnect) + `tscon /dest:console`
+- Virtual display driver (persistent virtual monitor, no RDP dependency)
+- FUSIL team provides scheduled export to shared folder (preferred — eliminates UI automation)
 
 ---
 
