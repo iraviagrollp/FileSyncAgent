@@ -214,6 +214,19 @@ class FusilExporter:
         else:
             self.log.warning("Navigation controls did not appear within 20s — proceeding anyway")
 
+        # Wait for the search box (txtSearchMenu) to appear — it loads after the
+        # login overlay clears. Without this, _navigate_via_search finds login
+        # screen elements instead of the main screen's search box.
+        self.log.info("Waiting for main screen to fully load (search box)")
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if self._find_by_descendants(self.main_win, auto_id="txtSearchMenu") is not None:
+                self.log.info("Main screen ready (search box visible)")
+                break
+            time.sleep(0.5)
+        else:
+            self.log.warning("Search box did not appear within 15s — proceeding anyway")
+
     # ------------------------------------------------------------------
     # Menu navigation
     # ------------------------------------------------------------------
